@@ -479,7 +479,7 @@ function Roster:UpdateRosterList()
         rowBtn:SetPoint("TOPLEFT", row.frame, "TOPLEFT")
         rowBtn:SetPoint("BOTTOMRIGHT", row.frame, "BOTTOMRIGHT")
         rowBtn:SetFrameLevel(row.frame:GetFrameLevel() + 20)
-        rowBtn:RegisterForClicks("AnyUp")
+        rowBtn:RegisterForClicks("AnyUp", "AnyDown")
 
         -- Set up left-click portal cast if player has the spell
         local portalSpellName = nil
@@ -500,8 +500,8 @@ function Roster:UpdateRosterList()
         -- Right-click context menu (HookScript so attribute-based spell cast still fires)
         local memberFullName = m.fullName
         local memberDisplayName = m.name
-        rowBtn:HookScript("OnClick", function(self, button)
-            if button == "RightButton" and MenuUtil then
+        rowBtn:HookScript("OnClick", function(self, button, down)
+            if button == "RightButton" and not down and MenuUtil then
                 MenuUtil.CreateContextMenu(self, function(owner, rootDescription)
                     rootDescription:CreateTitle(memberDisplayName)
                     rootDescription:CreateButton("Whisper", function()

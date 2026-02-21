@@ -2,7 +2,7 @@
 ## Title: VesperGuildRoster
 ## Notes: Guild M+ helper.
 ## Author: dPanta
-## Version: 1.0.5
+## Version: 1.1.2
 ## SavedVariables: VesperGuildDB
 
 ## OptionalDeps: Ace3

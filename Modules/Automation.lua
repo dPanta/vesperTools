@@ -21,6 +21,9 @@ function Automation:OnEnable()
     -- Listen for M+ completion
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnMPlusCompleted")
 
+    -- Pre-load M+ data so GetSeasonBestForMap works when we need it
+    C_MythicPlus.RequestMapInfo()
+
     self:RegisterChatCommand("vespertest", "TestKeyReminder")
 
     -- Clean up stale entries
@@ -163,9 +166,12 @@ end
 -- Handle incoming best keys request — respond by broadcasting our own best keys
 function Automation:OnBestKeysRequested(prefix, message, distribution, sender)
     if prefix ~= BESTKEYS_REQ_PREFIX or distribution ~= "GUILD" then return end
-    -- Reset cooldown so we actually respond
-    lastBestKeysBroadcast = 0
-    self:BroadcastBestKeys()
+    -- Request M+ data load, then respond after a short delay so the API has time to populate
+    C_MythicPlus.RequestMapInfo()
+    C_Timer.After(2, function()
+        lastBestKeysBroadcast = 0
+        self:BroadcastBestKeys()
+    end)
 end
 
 -- Request best keys from all online guild members
