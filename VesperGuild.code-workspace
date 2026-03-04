@@ -46,7 +46,11 @@
 			"ChatEdit_GetActiveWindow",
 			"WeeklyRewards_ShowUI",
 			"ChatFrame_OpenChat",
-			"UNKNOWN"
-		]
+			"UNKNOWN",
+			"STANDARD_TEXT_FONT",
+			"UISpecialFrames",
+			"MouseIsOver"
+		],
+		"Lua.type.weakUnionCheck": true
 	}
 }

@@ -9,10 +9,27 @@ end
 function Roster:OnEnable()
     self:RegisterMessage("VESPERGUILD_ILVL_UPDATE", "OnSyncUpdate")
     self:RegisterMessage("VESPERGUILD_BESTKEYS_UPDATE", "OnSyncUpdate")
+    self:RegisterMessage("VESPERGUILD_CONFIG_CHANGED", "OnConfigChanged")
 end
 
 function Roster:OnSyncUpdate()
     if self.frame and self.frame:IsShown() then
+        self:UpdateRosterList()
+    end
+end
+
+-- Handle central style/config updates (font + opacity) and repaint visible UI.
+function Roster:OnConfigChanged()
+    if not self.frame then
+        return
+    end
+
+    local baseFontSize = VesperGuild:GetConfiguredFontSize("roster", 12, 8, 24)
+    self.frame:SetBackdropColor(0.07, 0.07, 0.07, VesperGuild:GetConfiguredOpacity("roster"))
+    if self.titleText then
+        VesperGuild:ApplyConfiguredFont(self.titleText, baseFontSize + 4, "")
+    end
+    if self.frame:IsShown() then
         self:UpdateRosterList()
     end
 end
@@ -54,7 +71,7 @@ function Roster:ShowRoster()
          edgeFile = "Interface\\Buttons\\WHITE8x8",
          edgeSize = 1,
      })
-     self.frame:SetBackdropColor(0.07, 0.07, 0.07, 0.95) -- #121212
+     self.frame:SetBackdropColor(0.07, 0.07, 0.07, VesperGuild:GetConfiguredOpacity("roster")) -- #121212
      local _, englishClass = UnitClass("player")
      local classColor = C_ClassColor.GetClassColor(englishClass)
      self.frame:SetBackdropBorderColor(classColor.r, classColor.g, classColor.b, 1)
@@ -73,6 +90,8 @@ function Roster:ShowRoster()
     title:SetPoint("LEFT", 10, 0)
     local guildName = GetGuildInfo("player")
     title:SetText(guildName or "Guild Roster")
+    VesperGuild:ApplyConfiguredFont(title, VesperGuild:GetConfiguredFontSize("roster", 12, 8, 24) + 4, "")
+    self.titleText = title
     
     -- Make draggable via titlebar
     titlebar:EnableMouse(true)
@@ -108,6 +127,7 @@ function Roster:ShowRoster()
         self.frame = nil
         self.scroll = nil
         self.contentFrame = nil
+        self.titleText = nil
         if self.dungeonPanel then
             self.dungeonPanel:Hide()
             self.dungeonPanel = nil
@@ -154,6 +174,17 @@ function Roster:ShowRoster()
         end
         self:UpdateRosterList()
     end)
+
+    -- Configuration button (left of Sync) opens the custom config panel.
+    local confBtn = CreateFrame("Button", nil, titlebar, "UIPanelButtonTemplate")
+    confBtn:SetPoint("RIGHT", syncBtn, "LEFT", -5, 0)
+    confBtn:SetSize(60, 22)
+    confBtn:SetText("Conf")
+    confBtn:SetScript("OnClick", function(_, mouseButton)
+        if mouseButton == "LeftButton" then
+            VesperGuild:OpenConfig()
+        end
+    end)
     
     -- Content Container
     local contentFrame = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
@@ -187,6 +218,7 @@ function Roster:Toggle()
         self.frame = nil
         self.scroll = nil
         self.contentFrame = nil
+        self.titleText = nil
     else
         self:ShowRoster()
     end
@@ -199,6 +231,29 @@ local function CenterLabelV(widget)
         widget.label:ClearAllPoints()
         widget.label:SetPoint("TOPLEFT", widget.frame, "TOPLEFT", 0, 0)
         widget.label:SetPoint("BOTTOMRIGHT", widget.frame, "BOTTOMRIGHT", 0, 0)
+    end
+end
+
+-- Apply the currently selected addon font to an AceGUI widget.
+-- Falls back to applying the font directly on the underlying label.
+local function ApplyWidgetFont(widget, size, flags)
+    if not widget then
+        return
+    end
+
+    local path = VesperGuild:GetConfiguredFontPath()
+    local resolvedSize = tonumber(size) or 12
+    local resolvedFlags = type(flags) == "string" and flags or ""
+
+    if type(widget.SetFont) == "function" then
+        local ok = pcall(widget.SetFont, widget, path, resolvedSize, resolvedFlags)
+        if ok then
+            return
+        end
+    end
+
+    if widget.label then
+        VesperGuild:ApplyConfiguredFont(widget.label, resolvedSize, resolvedFlags)
     end
 end
 
@@ -219,6 +274,9 @@ local COLUMNS = {
 
 function Roster:UpdateRosterList()
     if not self.frame then return end
+
+    -- Base row/header typography controlled from config per-frame tab.
+    local rosterFontSize = VesperGuild:GetConfiguredFontSize("roster", 12, 8, 24)
 
     -- Clean up any existing portal buttons
     if self.portalButtons then
@@ -245,6 +303,7 @@ function Roster:UpdateRosterList()
         local header = AceGUI:Create("InteractiveLabel")
         header:SetText(col.label .. arrow)
         header:SetRelativeWidth(col.width)
+        ApplyWidgetFont(header, rosterFontSize, "")
         CenterLabelV(header)
 
         header:SetCallback("OnClick", function(_, _, button)
@@ -252,6 +311,7 @@ function Roster:UpdateRosterList()
                 self.sortAscending = not self.sortAscending
             else
                 self.sortColumn = col.key
+                -- Strings feel more natural ascending by default; numbers default descending.
                 self.sortAscending = (col.sort == "string")
             end
             self:UpdateRosterList()
@@ -307,6 +367,7 @@ function Roster:UpdateRosterList()
         local name, _, _, level, _, zone, _, _, isOnline, status, classFileName = GetGuildRosterInfo(i)
 
         if isOnline then
+            -- Normalize "Name-Realm" variants so lookups match across different data producers.
             local displayName = name:match("([^-]+)") or name
             local fullName = name
             if not string.find(name, "-") then
@@ -326,6 +387,7 @@ function Roster:UpdateRosterList()
             -- iLvl
             local ilvlNum = 0
             if DataHandle then
+                -- Try multiple key formats because senders may include/exclude realm suffix.
                 local ilvlData = DataHandle:GetIlvlForPlayer(fullName)
                     or DataHandle:GetIlvlForPlayer(name)
                     or DataHandle:GetIlvlForPlayer(displayName)
@@ -337,6 +399,7 @@ function Roster:UpdateRosterList()
             local ratingNum = 0
             local keyData = VesperGuild.db.global.keystones
                 and (
+                    -- Same multi-key fallback strategy as ilvl for cross-realm consistency.
                     VesperGuild.db.global.keystones[fullName]
                     or VesperGuild.db.global.keystones[name]
                     or VesperGuild.db.global.keystones[displayName]
@@ -381,6 +444,7 @@ function Roster:UpdateRosterList()
     if self.sortColumn then
         table.sort(members, function(a, b)
             local va, vb = a[self.sortColumn], b[self.sortColumn]
+            -- Stable-ish tie-break by name to avoid row jitter between refreshes.
             if va == vb then return a.name < b.name end
             if self.sortAscending then
                 return va < vb
@@ -406,7 +470,7 @@ function Roster:UpdateRosterList()
         local nameLabel = AceGUI:Create("Label")
         nameLabel:SetText(nameText)
         nameLabel:SetRelativeWidth(0.15)
-        nameLabel:SetFont("Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf", 12, "")
+        ApplyWidgetFont(nameLabel, rosterFontSize, "")
         CenterLabelV(nameLabel)
         row:AddChild(nameLabel)
 
@@ -418,7 +482,7 @@ function Roster:UpdateRosterList()
         local factionLabel = AceGUI:Create("Label")
         factionLabel:SetText(factionColor .. m.faction .. "|r")
         factionLabel:SetRelativeWidth(0.05)
-        factionLabel:SetFont("Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf", 12, "")
+        ApplyWidgetFont(factionLabel, rosterFontSize, "")
         CenterLabelV(factionLabel)
         row:AddChild(factionLabel)
 
@@ -426,7 +490,7 @@ function Roster:UpdateRosterList()
         local zoneLabel = AceGUI:Create("Label")
         zoneLabel:SetText(m.zone)
         zoneLabel:SetRelativeWidth(0.20)
-        zoneLabel:SetFont("Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf", 12, "")
+        ApplyWidgetFont(zoneLabel, rosterFontSize, "")
         CenterLabelV(zoneLabel)
         row:AddChild(zoneLabel)
 
@@ -438,7 +502,7 @@ function Roster:UpdateRosterList()
         local statusLabel = AceGUI:Create("Label")
         statusLabel:SetText(statusDisplay)
         statusLabel:SetRelativeWidth(0.10)
-        statusLabel:SetFont("Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf", 12, "")
+        ApplyWidgetFont(statusLabel, rosterFontSize, "")
         CenterLabelV(statusLabel)
         row:AddChild(statusLabel)
 
@@ -446,7 +510,7 @@ function Roster:UpdateRosterList()
         local ilvlLabel = AceGUI:Create("Label")
         ilvlLabel:SetText(m.ilvl > 0 and tostring(m.ilvl) or "-")
         ilvlLabel:SetRelativeWidth(0.10)
-        ilvlLabel:SetFont("Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf", 12, "")
+        ApplyWidgetFont(ilvlLabel, rosterFontSize, "")
         CenterLabelV(ilvlLabel)
         row:AddChild(ilvlLabel)
 
@@ -459,7 +523,7 @@ function Roster:UpdateRosterList()
         local ratingLabel = AceGUI:Create("Label")
         ratingLabel:SetText(ratingText)
         ratingLabel:SetRelativeWidth(0.1)
-        ratingLabel:SetFont("Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf", 12, "")
+        ApplyWidgetFont(ratingLabel, rosterFontSize, "")
         CenterLabelV(ratingLabel)
         row:AddChild(ratingLabel)
 
@@ -467,7 +531,7 @@ function Roster:UpdateRosterList()
         local keyLabel = AceGUI:Create("Label")
         keyLabel:SetText(m.keystoneText)
         keyLabel:SetRelativeWidth(0.2)
-        keyLabel:SetFont("Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf", 12, "")
+        ApplyWidgetFont(keyLabel, rosterFontSize, "")
         CenterLabelV(keyLabel)
         row:AddChild(keyLabel)
 
@@ -480,6 +544,7 @@ function Roster:UpdateRosterList()
 
         local baseColorR, baseColorG, baseColorB
         if m.isInGroup then
+            -- Slightly different tint for current party members to improve scanability.
             baseColorR, baseColorG, baseColorB = 0.12, 0.24, 0.24
         elseif (i % 2 == 0) then
             baseColorR, baseColorG, baseColorB = 0.17, 0.17, 0.17
@@ -496,7 +561,7 @@ function Roster:UpdateRosterList()
         rowBtn:SetFrameLevel(row.frame:GetFrameLevel() + 20)
         rowBtn:RegisterForClicks("AnyUp", "AnyDown")
 
-        -- Set up left-click portal cast if player has the spell
+        -- Left-click cast path uses secure button attributes (spell assignment at build time).
         local portalSpellName = nil
         if m.keystoneMapID and DataHandle then
             local dungInfo = DataHandle:GetDungeonByMapID(m.keystoneMapID)
@@ -512,7 +577,7 @@ function Roster:UpdateRosterList()
             end
         end
 
-        -- Right-click context menu (HookScript so attribute-based spell cast still fires)
+        -- Use HookScript so secure left-click casting remains intact while adding right-click menu.
         local memberFullName = m.fullName
         local memberDisplayName = m.name
         rowBtn:HookScript("OnClick", function(self, button, down)
@@ -553,7 +618,7 @@ function Roster:UpdateRosterList()
                     local entries = {}
                     local seen = {}
 
-                    -- Primary: addon sync data (per-member best keys)
+                    -- Primary source: addon-synced per-player best keys.
                     if DataHandle then
                         local bestKeysDB = DataHandle:GetBestKeysDB()
                         if bestKeysDB then
@@ -568,7 +633,7 @@ function Roster:UpdateRosterList()
                         end
                     end
 
-                    -- Supplement: WoW guild leaderboard (top guild run per dungeon)
+                    -- Secondary source: Blizzard guild leaderboard entries.
                     local guildLeaders = C_ChallengeMode.GetGuildLeaders()
                     if guildLeaders then
                         for _, attempt in ipairs(guildLeaders) do
@@ -582,6 +647,7 @@ function Roster:UpdateRosterList()
                     end
 
                     table.sort(entries, function(a, b)
+                        -- Highest key first, then lexical name for deterministic ordering.
                         if a.level == b.level then return a.name < b.name end
                         return a.level > b.level
                     end)

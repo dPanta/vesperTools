@@ -1,32 +1,38 @@
 local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
 local Automation = VesperGuild:NewModule("Automation", "AceConsole-3.0", "AceEvent-3.0", "AceComm-3.0")
 
+-- Automation module responsibilities:
+-- 1) Guild-wide ilvl + best-key broadcasts (AceComm).
+-- 2) Receive and persist guild payloads via DataHandle.
+-- 3) Trigger syncs when addon UI opens or when M+ completes.
 local ILVL_PREFIX = "VGiLvl"
 local BESTKEYS_PREFIX = "VGBestKeys"
 local BESTKEYS_REQ_PREFIX = "VGBKReq"
+-- Shared cooldown for outgoing broadcasts to avoid chat-throttle spam.
 local SYNC_COOLDOWN = 30 -- seconds between broadcasts to avoid spam
 local lastIlvlBroadcast = 0
 local lastBestKeysBroadcast = 0
 local cachedRealmName = nil
 
 function Automation:OnEnable()
+    -- Register all communication channels used by this module.
     -- Register comm prefixes
     self:RegisterComm(ILVL_PREFIX, "OnIlvlReceived")
     self:RegisterComm(BESTKEYS_PREFIX, "OnBestKeysReceived")
     self:RegisterComm(BESTKEYS_REQ_PREFIX, "OnBestKeysRequested")
 
-    -- Listen for addon open to trigger syncs
+    -- Use "addon opened" as a practical sync moment when the user expects fresh data.
     self:RegisterMessage("VESPERGUILD_ADDON_OPENED", "OnAddonOpened")
 
     -- Listen for M+ completion
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnMPlusCompleted")
 
-    -- Pre-load M+ data so GetSeasonBestForMap works when we need it
+    -- Warm up Blizzard M+ cache so best-run API is populated before we read it.
     C_MythicPlus.RequestMapInfo()
 
     self:RegisterChatCommand("vespertest", "TestKeyReminder")
 
-    -- Clean up stale entries
+    -- Trim stale SavedVariables entries at startup to keep roster data relevant.
     local DataHandle = VesperGuild:GetModule("DataHandle", true)
     if DataHandle then
         DataHandle:CleanupStaleIlvl()
@@ -35,6 +41,7 @@ function Automation:OnEnable()
 end
 
 function Automation:OnAddonOpened()
+    -- Full refresh pass: publish local data and request peers to publish theirs.
     self:BroadcastIlvl()
     self:BroadcastBestKeys()
     self:RequestBestKeys()
@@ -48,16 +55,18 @@ end
 function Automation:BroadcastIlvl()
     if not IsInGuild() then return end
 
-    -- Cooldown check
+    -- Cooldown gate to avoid sending repeated payloads during quick UI toggles.
     local now = GetTime()
     if (now - lastIlvlBroadcast) < SYNC_COOLDOWN then return end
     lastIlvlBroadcast = now
 
     local _, ilvl = GetAverageItemLevel()
+    -- Keep payload compact and stable for display/sorting.
     ilvl = math.floor(ilvl)
 
     local _, _, classID = UnitClass("player")
 
+    -- Payload format: "ilvl:classID" (example: "635:11").
     local payload = string.format("%d:%d", ilvl, classID)
     self:SendCommMessage(ILVL_PREFIX, payload, "GUILD")
 end
@@ -73,6 +82,7 @@ function Automation:OnIlvlReceived(prefix, message, distribution, sender)
         sender = sender .. "-" .. cachedRealmName
     end
 
+    -- Parse "ilvl:classID" and ignore malformed payloads gracefully.
     local ilvlStr, classIDStr = strsplit(":", message)
     local ilvl = tonumber(ilvlStr)
     local classID = tonumber(classIDStr)
@@ -98,6 +108,7 @@ function Automation:BroadcastBestKeys()
     if not curSeason or #curSeason == 0 then return end
 
     local _, _, classID = UnitClass("player")
+    -- `parts` holds serialized payload entries, `localBestKeys` is persisted locally.
     local parts = {}
     local localBestKeys = {}
     for _, mapID in ipairs(curSeason) do
@@ -108,18 +119,20 @@ function Automation:BroadcastBestKeys()
             bestDuration = inTimeInfo.durationSec
             wasInTime = true
         end
+        -- If overtime run has higher level, prefer it for "best level" display.
         if overTimeInfo and overTimeInfo.level and overTimeInfo.level > bestLevel then
             bestLevel = overTimeInfo.level
             bestDuration = overTimeInfo.durationSec
             wasInTime = false
         end
+        -- Entry format per dungeon: "mapID:level:duration:inTime(0/1)".
         table.insert(parts, string.format("%d:%d:%d:%d", mapID, bestLevel, bestDuration, wasInTime and 1 or 0))
         if bestLevel > 0 then
             localBestKeys[mapID] = { level = bestLevel, duration = bestDuration, inTime = wasInTime }
         end
     end
 
-    -- Store locally so we don't depend on the comm echo
+    -- Persist own data immediately (guild echo is not guaranteed/timely).
     cachedRealmName = cachedRealmName or GetNormalizedRealmName()
     local playerName = UnitName("player") .. "-" .. cachedRealmName
     local DataHandle = VesperGuild:GetModule("DataHandle", true)
@@ -127,6 +140,7 @@ function Automation:BroadcastBestKeys()
         DataHandle:StoreBestKeys(playerName, localBestKeys, classID)
     end
 
+    -- Full payload format: "classID;mapID:level:duration:inTime,..."
     local payload = classID .. ";" .. table.concat(parts, ",")
     self:SendCommMessage(BESTKEYS_PREFIX, payload, "GUILD")
 end
@@ -140,12 +154,14 @@ function Automation:OnBestKeysReceived(prefix, message, distribution, sender)
         sender = sender .. "-" .. cachedRealmName
     end
 
+    -- Parse class metadata + per-dungeon entries from serialized payload.
     local classIDStr, dungeonData = strsplit(";", message)
     local classID = tonumber(classIDStr)
     if not dungeonData then return end
 
     local bestKeys = {}
     for entry in string.gmatch(dungeonData, "[^,]+") do
+        -- Each entry is "mapID:level:duration:inTime".
         local mStr, lStr, dStr, iStr = strsplit(":", entry)
         local mapID = tonumber(mStr)
         local level = tonumber(lStr)
@@ -166,7 +182,7 @@ end
 -- Handle incoming best keys request — respond by broadcasting our own best keys
 function Automation:OnBestKeysRequested(prefix, message, distribution, sender)
     if prefix ~= BESTKEYS_REQ_PREFIX or distribution ~= "GUILD" then return end
-    -- Request M+ data load, then respond after a short delay so the API has time to populate
+    -- Request M+ data load, then respond after a short delay so APIs have time to populate.
     C_MythicPlus.RequestMapInfo()
     C_Timer.After(2, function()
         lastBestKeysBroadcast = 0
@@ -177,6 +193,7 @@ end
 -- Request best keys from all online guild members
 function Automation:RequestBestKeys()
     if not IsInGuild() then return end
+    -- Lightweight "pull" request; peers answer with BESTKEYS_PREFIX payload.
     self:SendCommMessage(BESTKEYS_REQ_PREFIX, "req", "GUILD")
 end
 
@@ -187,19 +204,20 @@ function Automation:OnMPlusCompleted()
     -- Only fire if the run was in time
     if not onTime then return end
 
-    -- Only fire if current keystone level is lower or equal to the completed key
+    -- Only fire if the newly completed run could plausibly replace current key.
     local ownedLevel = C_MythicPlus.GetOwnedKeystoneLevel()
     if ownedLevel and ownedLevel > level then return end
 
     self:ShowKeyReminder()
 
-    -- Broadcast updated best keys after completing a dungeon
+    -- Force immediate post-run publish by bypassing cooldown.
     lastBestKeysBroadcast = 0
     self:BroadcastBestKeys()
 end
 
 function Automation:ShowKeyReminder()
     if not self.keyReminderFrame then
+        -- Lazy-create fullscreen overlay once; reuse for later reminders.
         local f = CreateFrame("Frame", nil, UIParent)
         f:SetAllPoints()
         f:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -215,6 +233,7 @@ function Automation:ShowKeyReminder()
     end
 
     self.keyReminderFrame:Show()
+    -- Auto-hide reminder so it never becomes sticky across combat/scene changes.
     C_Timer.After(10, function()
         if self.keyReminderFrame then
             self.keyReminderFrame:Hide()
@@ -224,6 +243,7 @@ end
 
 -- Manual sync (call from a button or slash command)
 function Automation:ManualSync()
+    -- Reset cooldown gates so manual request always publishes immediately.
     lastIlvlBroadcast = 0
     lastBestKeysBroadcast = 0
     self:BroadcastIlvl()

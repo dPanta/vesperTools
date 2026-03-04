@@ -2,7 +2,7 @@
 ## Title: VesperGuildRoster
 ## Notes: Guild M+ helper.
 ## Author: dPanta
-## Version: 1.2.1
+## Version: 1.3.0
 ## SavedVariables: VesperGuildDB
 
 ## OptionalDeps: Ace3
@@ -41,4 +41,5 @@ Modules\DataHandle.lua
 Modules\KeystoneSync.lua
 Modules\Roster.lua
 Modules\Portals.lua
+Modules\Configuration.lua
 Modules\Automation.lua

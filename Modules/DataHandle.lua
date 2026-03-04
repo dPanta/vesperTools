@@ -1,9 +1,15 @@
 local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
 local DataHandle = VesperGuild:NewModule("DataHandle")
 
+-- DataHandle responsibilities:
+-- 1) Static dungeon metadata lookup (mapID -> portal spell/name).
+-- 2) Shared color helpers for key level and rating text.
+-- 3) Persistent data accessors for ilvl sync + best-key sync stores.
 -- Local database for dungeon information
 local dungListDB = nil
 
+-- Canonical dungeon catalog used by portal and roster modules.
+-- Note: some dungeons intentionally appear twice with different portal spell IDs.
 local dungList = {
         -- Mists of Pandaria (MoP)
         { exp = "MoP", mapID = 2, spellID = 131204, dungeonName = "Temple of the Jade Serpent" },
@@ -82,9 +88,9 @@ function DataHandle:OnInitialize()
     -- Initialize the local database
     dungListDB = {}
 
-    -- Load the dungeon list into the database
+    -- Build mapID index for O(1) lookup in runtime UI code.
     for _, dungInfo in ipairs(dungList) do
-        -- Store by mapID for easy lookup
+        -- Keep list shape to preserve multiple entries for same mapID if needed.
         if not dungListDB[dungInfo.mapID] then
             dungListDB[dungInfo.mapID] = {}
         end
@@ -102,6 +108,7 @@ end
 
 function DataHandle:GetDungeonByMapID(mapID)
     if dungListDB and dungListDB[mapID] then
+        -- Return first configured record as default for consumers expecting one entry.
         return dungListDB[mapID][1] -- Return first match
     end
     return nil
@@ -120,6 +127,7 @@ end
 function DataHandle:GetKeyColor(level)
     local color = C_ChallengeMode.GetKeystoneLevelRarityColor(level)
     if color then
+        -- Convert float color components [0..1] to integer hex for "|cffRRGGBB".
         local r = math.floor((color.r or 0) * 255 + 0.5)
         local g = math.floor((color.g or 0) * 255 + 0.5)
         local b = math.floor((color.b or 0) * 255 + 0.5)
@@ -132,6 +140,7 @@ end
 function DataHandle:GetRatingColor(rating)
     local color = C_ChallengeMode.GetDungeonScoreRarityColor(rating)
     if color then
+        -- Convert float color components [0..1] to integer hex for "|cffRRGGBB".
         local r = math.floor((color.r or 0) * 255 + 0.5)
         local g = math.floor((color.g or 0) * 255 + 0.5)
         local b = math.floor((color.b or 0) * 255 + 0.5)
@@ -149,6 +158,7 @@ function DataHandle:StoreIlvl(playerName, ilvl, classID)
     if not VesperGuild.db.global.ilvlSync then
         VesperGuild.db.global.ilvlSync = {}
     end
+    -- Timestamp supports stale-data cleanup and optional freshness UI.
     VesperGuild.db.global.ilvlSync[playerName] = {
         ilvl = ilvl,
         classID = classID,
@@ -169,6 +179,7 @@ function DataHandle:CleanupStaleIlvl(maxAge)
     if not db then return end
     maxAge = maxAge or (7 * 24 * 3600) -- default 7 days
     local now = time()
+    -- In-place prune to keep SavedVariables bounded over long play sessions.
     for name, data in pairs(db) do
         if not data.timestamp or (now - data.timestamp) > maxAge then
             db[name] = nil
@@ -185,6 +196,7 @@ function DataHandle:StoreBestKeys(playerName, bestKeysData, classID)
     if not VesperGuild.db.global.bestKeys then
         VesperGuild.db.global.bestKeys = {}
     end
+    -- Store metadata on the same object to simplify downstream display logic.
     bestKeysData.timestamp = time()
     bestKeysData.classID = classID
     VesperGuild.db.global.bestKeys[playerName] = bestKeysData
@@ -203,6 +215,7 @@ function DataHandle:CleanupStaleBestKeys(maxAge)
     if not db then return end
     maxAge = maxAge or (7 * 24 * 3600) -- default 7 days
     local now = time()
+    -- Remove outdated rows so guild-best tooltips prioritize recent season data.
     for name, data in pairs(db) do
         if data.timestamp and (now - data.timestamp) > maxAge then
             db[name] = nil

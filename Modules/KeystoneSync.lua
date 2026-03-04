@@ -2,6 +2,10 @@ local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild
 local KeystoneSync = VesperGuild:NewModule("KeystoneSync", "AceEvent-3.0", "AceTimer-3.0")
 local LibKeystone = LibStub("LibKeystone")
 
+-- KeystoneSync responsibilities:
+-- 1) Receive guild keystone payloads from LibKeystone.
+-- 2) Normalize/store data in AceDB global keystone table.
+-- 3) Provide formatted display text for roster cells.
 local cachedRealmName = nil
 
 -- Dungeon abbreviation lookup (TWW Season 3 dungeons)
@@ -21,6 +25,7 @@ local DUNGEON_ABBREV = {
 function KeystoneSync:OnEnable()
     -- Register LibKeystone callback for receiving keystone data
     if LibKeystone then
+        -- LibKeystone invokes this callback whenever compatible data arrives.
         LibKeystone.Register(self, function(keyLevel, keyChallengeMapID, playerRating, sender, channel)
             self:OnLibKeystoneReceived(keyLevel, keyChallengeMapID, playerRating, sender, channel)
         end)
@@ -73,14 +78,14 @@ function KeystoneSync:OnLibKeystoneReceived(keyLevel, keyChallengeMapID, playerR
         sender = sender .. "-" .. cachedRealmName
     end
 
-    -- Store keystone data (-1 means hidden, treat as no keystone)
+    -- LibKeystone uses -1 for hidden/unavailable values; treat as "no key".
     if keyLevel == -1 or keyChallengeMapID == -1 then
         self:StoreKeystone(sender, 0, 0, playerRating)
     else
         self:StoreKeystone(sender, keyChallengeMapID, keyLevel, playerRating)
     end
 
-    -- Fire update event
+    -- Notify UI listeners to repaint displayed key info.
     VesperGuild:SendMessage("VESPERGUILD_KEYSTONE_UPDATE", sender)
 end
 
@@ -110,7 +115,7 @@ function KeystoneSync:StoreKeystone(playerName, mapID, level, rating)
     end
 
     if mapID == 0 or level == 0 then
-        -- Player has no keystone
+        -- Remove entry so callers can treat missing row as "no key".
         VesperGuild.db.global.keystones[playerName] = nil
     else
         VesperGuild.db.global.keystones[playerName] = {
@@ -132,7 +137,7 @@ function KeystoneSync:GetKeystoneForPlayer(playerName)
         return nil
     end
     
-    -- Check if data is too old (>48 hours)
+    -- Hard-expire entries older than 48h to avoid showing dead data.
     if not data.timestamp then
         VesperGuild.db.global.keystones[playerName] = nil
         return nil
@@ -144,7 +149,7 @@ function KeystoneSync:GetKeystoneForPlayer(playerName)
         return nil
     end
     
-    -- Check if data is "stale" (>2 hours) for visual indicator
+    -- Soft-stale marker used only for display hint in roster cell.
     local isStale = age > (2 * 3600)
     
     local abbrev = self:GetDungeonAbbrev(data.mapID)
@@ -158,12 +163,12 @@ function KeystoneSync:GetKeystoneForPlayer(playerName)
 end
 
 function KeystoneSync:GetDungeonAbbrev(mapID)
-    -- Try lookup table first
+    -- Prefer explicit curated abbreviations for consistency.
     if DUNGEON_ABBREV[mapID] then
         return DUNGEON_ABBREV[mapID]
     end
     
-    -- Fallback to API
+    -- Fallback: derive abbreviation from dungeon name initials.
     local name = C_ChallengeMode.GetMapUIInfo(mapID)
     if name then
         -- Try to create abbreviation from first letters
@@ -185,6 +190,7 @@ function KeystoneSync:CleanupStaleEntries()
     local now = time()
     local removed = 0
     
+    -- In-place cleanup keeps saved data lean and avoids stale roster rows.
     for playerName, data in pairs(VesperGuild.db.global.keystones) do
         if not data.timestamp or (now - data.timestamp) > (48 * 3600) then
             VesperGuild.db.global.keystones[playerName] = nil
