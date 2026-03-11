@@ -413,8 +413,7 @@ function Portals:CreateToyFlyoutFrame()
     local buttonSize = self:GetTopUtilityButtonSize()
     self.toyFlyoutFrame = CreateFrame("Frame", "VesperGuildToyFlyoutFrame", self.topUtilityFrame, "BackdropTemplate")
     self.toyFlyoutFrame:SetSize(buttonSize + (TOY_FLYOUT_PADDING * 2), buttonSize + (TOY_FLYOUT_PADDING * 2))
-    self.toyFlyoutFrame:SetFrameStrata(VesperGuild:GetAddonWindowStrata())
-    self.toyFlyoutFrame:SetFrameLevel((self.topUtilityFrame:GetFrameLevel() or 0) + 2)
+    VesperGuild:ApplyAddonWindowLayer(self.toyFlyoutFrame, (self.topUtilityFrame:GetFrameLevel() or 0) + 2)
     self.toyFlyoutFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -657,7 +656,7 @@ function Portals:CreateTopUtilityFrame()
     self.topUtilityFrame = CreateFrame("Frame", "VesperGuildTopUtilityFrame", self.VesperPortalsUI, "BackdropTemplate")
     self.topUtilityFrame:SetSize((TOP_UTILITY_PADDING * 2) + (2 * buttonSize) + TOP_UTILITY_BUTTON_GAP, frameHeight)
     self.topUtilityFrame:SetPoint("BOTTOM", self.VesperPortalsUI, "TOP", 0, 10)
-    self.topUtilityFrame:SetFrameStrata(VesperGuild:GetAddonWindowStrata())
+    VesperGuild:ApplyAddonWindowLayer(self.topUtilityFrame)
 
     self.topUtilityFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -920,7 +919,7 @@ function Portals:CreatePortalFrame()
         self.VesperPortalsUI:SetPoint("LEFT", UIParent, "CENTER", 250, 0)
     end
 
-    self.VesperPortalsUI:SetFrameStrata(VesperGuild:GetAddonWindowStrata())
+    VesperGuild:ApplyAddonWindowLayer(self.VesperPortalsUI)
     self.VesperPortalsUI:SetMovable(true)
     self.VesperPortalsUI:EnableMouse(true)
     self.VesperPortalsUI:RegisterForDrag("LeftButton")
@@ -1047,7 +1046,7 @@ function Portals:CreateVaultFrame()
     self.vaultFrame = CreateFrame("Frame", "VesperGuildVaultFrame", self.VesperPortalsUI, "BackdropTemplate")
     self.vaultFrame:SetSize(72, 72)
     self.vaultFrame:SetPoint("TOP", self.VesperPortalsUI, "BOTTOM", 0, -10)
-    self.vaultFrame:SetFrameStrata(VesperGuild:GetAddonWindowStrata())
+    VesperGuild:ApplyAddonWindowLayer(self.vaultFrame)
 
     self.vaultFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -1116,7 +1115,7 @@ function Portals:CreateMPlusProgFrame(curSeason)
     self.mplusProgFrame = CreateFrame("Frame", "VesperGuildMPlusProgFrame", self.VesperPortalsUI, "BackdropTemplate")
     self.mplusProgFrame:SetSize(frameWidth, frameHeight)
     self.mplusProgFrame:SetPoint("LEFT", self.VesperPortalsUI, "RIGHT", 10, 0)
-    self.mplusProgFrame:SetFrameStrata(VesperGuild:GetAddonWindowStrata())
+    VesperGuild:ApplyAddonWindowLayer(self.mplusProgFrame)
 
     self.mplusProgFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",

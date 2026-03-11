@@ -18,4 +18,3 @@ ignore:
   - .git
   - .gitignore
   - .pkgmeta
-  - TODO

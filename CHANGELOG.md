@@ -1,3 +1,12 @@
+## 1.5.0 - 2026-03-11
+
+### Changed
+- Reworked roster right-click menu anchoring to use a dedicated top-level context-menu anchor instead of inheriting the roster row's frame layering.
+
+### Fixed
+- Fixed the roster row right-click context menu rendering behind the main roster frame.
+- Fixed the roster fallback dropdown menu to render on tooltip strata so its entries remain clickable above the roster window.
+
 ## 1.4.2 - 2026-03-08
 
 ### Added

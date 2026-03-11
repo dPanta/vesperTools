@@ -41,12 +41,62 @@ end
 
 -- Lazily create one dropdown frame used by legacy fallback context menus.
 function Roster:GetContextMenuDropdown()
+    local dropdownLevel = 80
+    if self.frame and self.frame.GetFrameLevel then
+        dropdownLevel = math.max(dropdownLevel, (self.frame:GetFrameLevel() or 0) + 40)
+    end
+
     if self.contextMenuDropdown and self.contextMenuDropdown.GetName then
+        self.contextMenuDropdown:SetFrameStrata("TOOLTIP")
+        self.contextMenuDropdown:SetFrameLevel(dropdownLevel)
+        self.contextMenuDropdown:SetToplevel(true)
         return self.contextMenuDropdown
     end
 
     self.contextMenuDropdown = CreateFrame("Frame", "VesperGuildRosterContextMenu", UIParent, "UIDropDownMenuTemplate")
+    self.contextMenuDropdown:SetFrameStrata("TOOLTIP")
+    self.contextMenuDropdown:SetFrameLevel(dropdownLevel)
+    self.contextMenuDropdown:SetToplevel(true)
     return self.contextMenuDropdown
+end
+
+-- Create a neutral top-level anchor so Blizzard context menus do not inherit row layering.
+function Roster:GetContextMenuAnchor(anchorButton)
+    local anchorLevel = 80
+    if self.frame and self.frame.GetFrameLevel then
+        anchorLevel = math.max(anchorLevel, (self.frame:GetFrameLevel() or 0) + 40)
+    end
+
+    if not (self.contextMenuAnchor and self.contextMenuAnchor.GetName) then
+        self.contextMenuAnchor = CreateFrame("Frame", "VesperGuildRosterContextMenuAnchor", UIParent)
+        self.contextMenuAnchor:SetSize(2, 2)
+        self.contextMenuAnchor:SetClampedToScreen(true)
+    end
+
+    local anchor = self.contextMenuAnchor
+    anchor:SetFrameStrata("TOOLTIP")
+    anchor:SetFrameLevel(anchorLevel)
+    anchor:SetToplevel(true)
+    anchor:Show()
+    anchor:ClearAllPoints()
+
+    local uiScale = UIParent:GetEffectiveScale() or 1
+    local cursorX, cursorY = GetCursorPosition()
+    if uiScale > 0 and cursorX and cursorY and cursorX > 0 and cursorY > 0 then
+        anchor:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", cursorX / uiScale, cursorY / uiScale)
+        return anchor
+    end
+
+    if anchorButton and anchorButton.GetCenter then
+        local centerX, centerY = anchorButton:GetCenter()
+        if centerX and centerY then
+            anchor:SetPoint("CENTER", UIParent, "BOTTOMLEFT", centerX, centerY)
+            return anchor
+        end
+    end
+
+    anchor:SetPoint("CENTER", UIParent, "CENTER")
+    return anchor
 end
 
 -- Open manual roster right-click menu with stable cross-client fallbacks.
@@ -73,7 +123,9 @@ function Roster:OpenRosterContextMenu(anchorButton, fullName)
     end
 
     if anchorButton and MenuUtil and type(MenuUtil.CreateContextMenu) == "function" then
-        MenuUtil.CreateContextMenu(anchorButton, function(_, rootDescription)
+        local menuAnchor = self:GetContextMenuAnchor(anchorButton)
+        GameTooltip:Hide()
+        MenuUtil.CreateContextMenu(menuAnchor, function(_, rootDescription)
             rootDescription:CreateButton(L["CONTEXT_MENU_INVITE"], invitePlayer)
             rootDescription:CreateButton(L["CONTEXT_MENU_WHISPER"], whisperPlayer)
             rootDescription:CreateButton(L["CONTEXT_MENU_CLOSE"], function() end)
@@ -88,6 +140,8 @@ function Roster:OpenRosterContextMenu(anchorButton, fullName)
             { text = L["CONTEXT_MENU_CLOSE"], func = function() end, notCheckable = true },
         }
         local dropdown = self:GetContextMenuDropdown()
+        GameTooltip:Hide()
+        dropdown:Raise()
         EasyMenu(menu, dropdown, "cursor", 0, 0, "MENU")
         return true
     end
@@ -117,7 +171,7 @@ function Roster:ShowRoster()
         self.frame:SetPoint("RIGHT", UIParent, "CENTER", -250, 0)
     end
 
-    self.frame:SetFrameStrata(VesperGuild:GetAddonWindowStrata())
+    VesperGuild:ApplyAddonWindowLayer(self.frame)
     self.frame:SetMovable(true)
     self.frame:EnableMouse(true)
     self.frame:SetResizable(true)
@@ -619,7 +673,7 @@ function Roster:UpdateRosterList()
         local rowBtn = CreateFrame("Button", nil, row.frame, "InsecureActionButtonTemplate")
         rowBtn:SetPoint("TOPLEFT", row.frame, "TOPLEFT")
         rowBtn:SetPoint("BOTTOMRIGHT", row.frame, "BOTTOMRIGHT")
-        rowBtn:SetFrameLevel(row.frame:GetFrameLevel() + 20)
+        rowBtn:SetFrameLevel(row.frame:GetFrameLevel() + 1)
         rowBtn:RegisterForClicks("AnyUp", "AnyDown")
 
         -- Left-click cast path uses secure button attributes (spell assignment at build time).

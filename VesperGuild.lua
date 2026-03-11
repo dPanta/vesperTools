@@ -43,7 +43,7 @@ local PREFERRED_SECONDARY_HEARTHSTONE_ID = 253629 -- Personal Key to the Arcanti
 local DEFAULT_TOP_UTILITY_BUTTON_SIZE = 52
 local MIN_TOP_UTILITY_BUTTON_SIZE = 32
 local MAX_TOP_UTILITY_BUTTON_SIZE = 72
-local ADDON_WINDOW_STRATA = "DIALOG"
+local ADDON_WINDOW_STRATA = "FULLSCREEN_DIALOG"
 
 -- Curated font options exposed in configuration UI.
 local FONT_OPTIONS = {
@@ -217,9 +217,25 @@ function VesperGuild:GetFontOptions()
     return FONT_OPTIONS
 end
 
--- Use one fixed strata for addon-owned windows so they stay above normal UI viewers.
+-- Use one fixed high strata for addon-owned windows so they stay above regular UI.
 function VesperGuild:GetAddonWindowStrata()
     return ADDON_WINDOW_STRATA
+end
+
+-- Normalize addon-owned frames onto the shared strata and optionally pin a frame level.
+function VesperGuild:ApplyAddonWindowLayer(frame, frameLevel)
+    if not frame then
+        return
+    end
+
+    frame:SetFrameStrata(ADDON_WINDOW_STRATA)
+    if frameLevel then
+        frame:SetFrameLevel(frameLevel)
+    end
+
+    if frame.SetToplevel and frame:GetParent() == UIParent then
+        frame:SetToplevel(true)
+    end
 end
 
 -- Return ordered canonical hearthstone IDs.
@@ -800,6 +816,7 @@ function VesperGuild:CreateFloatingIcon()
     btn:SetMovable(true)
     btn:EnableMouse(true)
     btn:RegisterForDrag("LeftButton")
+    self:ApplyAddonWindowLayer(btn)
     
     -- Load Saved Position
     local pos = self.db.profile.icon
