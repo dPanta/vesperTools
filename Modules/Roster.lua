@@ -2,6 +2,36 @@ local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild
 local Roster = VesperGuild:NewModule("Roster", "AceConsole-3.0", "AceEvent-3.0")
 local AceGUI = LibStub("AceGUI-3.0")
 local L = VesperGuild.L
+local HEADER_ACTION_BUTTON_HEIGHT = 22
+local HEADER_ACTION_BUTTON_GAP = 6
+
+local function createHeaderActionButton(parent, anchor, width, label, onClick)
+    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    button:SetPoint("RIGHT", anchor, "LEFT", -HEADER_ACTION_BUTTON_GAP, 0)
+    button:SetSize(width, HEADER_ACTION_BUTTON_HEIGHT)
+    button:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    button:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
+    button:SetBackdropBorderColor(1, 1, 1, 0.12)
+    button:SetHighlightTexture("Interface\\Buttons\\WHITE8x8", "ADD")
+    button:GetHighlightTexture():SetVertexColor(0.24, 0.46, 0.72, 0.2)
+    button:SetPushedTexture("Interface\\Buttons\\WHITE8x8")
+    button:GetPushedTexture():SetVertexColor(0.12, 0.2, 0.3, 0.36)
+    if type(onClick) == "function" then
+        button:SetScript("OnClick", onClick)
+    end
+
+    local text = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    text:SetPoint("CENTER", 0, 0)
+    text:SetText(label)
+    VesperGuild:ApplyConfiguredFont(text, 11, "")
+    button.text = text
+
+    return button
+end
 
 function Roster:OnInitialize()
     -- Called when the module is initialized
@@ -222,10 +252,7 @@ function Roster:ShowRoster()
     end)
     
     -- Close Button
-    local closeBtn = CreateFrame("Button", nil, titlebar, "UIPanelCloseButton")
-    closeBtn:SetPoint("RIGHT", -5, 0)
-    closeBtn:SetSize(20, 20)
-    closeBtn:SetScript("OnClick", function()
+    local closeBtn = VesperGuild:CreateModernCloseButton(titlebar, function()
         -- Clean up portal buttons before closing
         if self.portalButtons then
             for _, btn in ipairs(self.portalButtons) do
@@ -249,7 +276,15 @@ function Roster:ShowRoster()
         if Portals and Portals.VesperPortalsUI then
             Portals.VesperPortalsUI:Hide()
         end
-    end)
+    end, {
+        size = 20,
+        iconScale = 0.52,
+        backgroundAlpha = 0.04,
+        borderAlpha = 0.08,
+        hoverAlpha = 0.12,
+        pressedAlpha = 0.18,
+    })
+    closeBtn:SetPoint("RIGHT", -6, 0)
     
     -- Resize Grip
     local resizeBtn = CreateFrame("Button", nil, self.frame)
@@ -271,11 +306,7 @@ function Roster:ShowRoster()
     end)
     
     -- Sync Button
-    local syncBtn = CreateFrame("Button", nil, titlebar, "UIPanelButtonTemplate")
-    syncBtn:SetPoint("RIGHT", closeBtn, "LEFT", -5, 0)
-    syncBtn:SetSize(80, 22)
-    syncBtn:SetText(L["ROSTER_BUTTON_SYNC"])
-    syncBtn:SetScript("OnClick", function()
+    local syncBtn = createHeaderActionButton(titlebar, closeBtn, 72, L["ROSTER_BUTTON_SYNC"], function()
         local KeystoneSync = VesperGuild:GetModule("KeystoneSync", true)
         if KeystoneSync then
             KeystoneSync:RequestGuildKeystones()
@@ -288,13 +319,27 @@ function Roster:ShowRoster()
     end)
 
     -- Configuration button (left of Sync) opens the custom config panel.
-    local confBtn = CreateFrame("Button", nil, titlebar, "UIPanelButtonTemplate")
-    confBtn:SetPoint("RIGHT", syncBtn, "LEFT", -5, 0)
-    confBtn:SetSize(60, 22)
-    confBtn:SetText(L["ROSTER_BUTTON_CONFIG"])
-    confBtn:SetScript("OnClick", function(_, mouseButton)
+    local confBtn = createHeaderActionButton(titlebar, syncBtn, 56, L["ROSTER_BUTTON_CONFIG"], function(_, mouseButton)
         if mouseButton == "LeftButton" then
             VesperGuild:OpenConfig()
+        end
+    end)
+
+    local bagsBtn = createHeaderActionButton(titlebar, confBtn, 56, L["ROSTER_BUTTON_BAGS"], function(_, mouseButton)
+        if mouseButton == "LeftButton" then
+            local BagsWindow = VesperGuild:GetModule("BagsWindow", true)
+            if BagsWindow and type(BagsWindow.Toggle) == "function" then
+                BagsWindow:Toggle()
+            end
+        end
+    end)
+
+    local bankBtn = createHeaderActionButton(titlebar, bagsBtn, 56, L["ROSTER_BUTTON_BANK"], function(_, mouseButton)
+        if mouseButton == "LeftButton" then
+            local BankWindow = VesperGuild:GetModule("BankWindow", true)
+            if BankWindow and type(BankWindow.Toggle) == "function" then
+                BankWindow:Toggle()
+            end
         end
     end)
     

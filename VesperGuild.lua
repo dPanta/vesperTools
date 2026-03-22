@@ -44,6 +44,21 @@ local DEFAULT_TOP_UTILITY_BUTTON_SIZE = 52
 local MIN_TOP_UTILITY_BUTTON_SIZE = 32
 local MAX_TOP_UTILITY_BUTTON_SIZE = 72
 local ADDON_WINDOW_STRATA = "FULLSCREEN_DIALOG"
+local DEFAULT_BAGS_WINDOW_WIDTH = 900
+local DEFAULT_BAGS_WINDOW_HEIGHT = 560
+local DEFAULT_BAGS_COLUMNS = 10
+local DEFAULT_BAGS_ITEM_ICON_SIZE = 38
+local DEFAULT_BAGS_STACK_COUNT_FONT_SIZE = 11
+local DEFAULT_BAGS_ITEM_LEVEL_FONT_SIZE = 9
+local DEFAULT_BAGS_QUALITY_GLOW_INTENSITY = 0.65
+local DEFAULT_BANK_WINDOW_WIDTH = 900
+local DEFAULT_BANK_WINDOW_HEIGHT = 560
+local DEFAULT_BANK_COLUMNS = 10
+local DEFAULT_BANK_ITEM_ICON_SIZE = 38
+local DEFAULT_BANK_STACK_COUNT_FONT_SIZE = 11
+local DEFAULT_BANK_ITEM_LEVEL_FONT_SIZE = 9
+local DEFAULT_BANK_QUALITY_GLOW_INTENSITY = 0.65
+local MODERN_CLOSE_BUTTON_TEXTURE = "Interface\\AddOns\\VesperGuild\\Media\\CloseModern-128"
 
 -- Curated font options exposed in configuration UI.
 local FONT_OPTIONS = {
@@ -236,6 +251,112 @@ function VesperGuild:ApplyAddonWindowLayer(frame, frameLevel)
     if frame.SetToplevel and frame:GetParent() == UIParent then
         frame:SetToplevel(true)
     end
+end
+
+function VesperGuild:CreateModernCloseButton(parent, onClick, options)
+    if not parent then
+        return nil
+    end
+
+    local resolvedOptions = type(options) == "table" and options or {}
+    local size = math.max(10, math.floor((tonumber(resolvedOptions.size) or 20) + 0.5))
+    local iconScale = tonumber(resolvedOptions.iconScale) or 0.5
+    local backgroundAlpha = tonumber(resolvedOptions.backgroundAlpha)
+    if backgroundAlpha == nil then
+        backgroundAlpha = 0.06
+    end
+    local borderAlpha = tonumber(resolvedOptions.borderAlpha)
+    if borderAlpha == nil then
+        borderAlpha = 0.1
+    end
+    local hoverAlpha = tonumber(resolvedOptions.hoverAlpha)
+    if hoverAlpha == nil then
+        hoverAlpha = 0.12
+    end
+    local pressedAlpha = tonumber(resolvedOptions.pressedAlpha)
+    if pressedAlpha == nil then
+        pressedAlpha = 0.18
+    end
+    local iconAlpha = tonumber(resolvedOptions.iconAlpha)
+    if iconAlpha == nil then
+        iconAlpha = 0.92
+    end
+    local iconHoverAlpha = tonumber(resolvedOptions.iconHoverAlpha)
+    if iconHoverAlpha == nil then
+        iconHoverAlpha = 1
+    end
+    local iconOffsetX = math.floor((tonumber(resolvedOptions.iconOffsetX) or 0) + 0.5)
+    local iconOffsetY = math.floor((tonumber(resolvedOptions.iconOffsetY) or 0) + 0.5)
+    local iconInset = tonumber(resolvedOptions.iconInset)
+    local iconSize
+    if iconInset then
+        iconSize = math.max(8, size - (math.floor(iconInset + 0.5) * 2))
+    else
+        iconSize = math.max(8, math.floor((size * iconScale) + 0.5))
+    end
+
+    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    button:SetSize(size, size)
+    button:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    button:SetBackdropColor(1, 1, 1, backgroundAlpha)
+    button:SetBackdropBorderColor(1, 1, 1, borderAlpha)
+
+    local hover = button:CreateTexture(nil, "ARTWORK")
+    hover:SetAllPoints()
+    hover:SetColorTexture(1, 1, 1, hoverAlpha)
+    hover:Hide()
+    button.vgHoverTexture = hover
+
+    local pressed = button:CreateTexture(nil, "ARTWORK")
+    pressed:SetAllPoints()
+    pressed:SetColorTexture(1, 1, 1, pressedAlpha)
+    pressed:Hide()
+    button.vgPressedTexture = pressed
+
+    local icon = button:CreateTexture(nil, "OVERLAY")
+    icon:SetPoint("CENTER", iconOffsetX, iconOffsetY)
+    icon:SetSize(iconSize, iconSize)
+    icon:SetTexture(MODERN_CLOSE_BUTTON_TEXTURE)
+    icon:SetVertexColor(1, 1, 1, iconAlpha)
+    button.vgIconTexture = icon
+
+    button:SetScript("OnEnter", function(selfButton)
+        if not selfButton:IsEnabled() then
+            return
+        end
+        selfButton.vgHoverTexture:Show()
+        selfButton.vgIconTexture:SetVertexColor(1, 1, 1, iconHoverAlpha)
+    end)
+    button:SetScript("OnLeave", function(selfButton)
+        selfButton.vgHoverTexture:Hide()
+        selfButton.vgPressedTexture:Hide()
+        selfButton.vgIconTexture:ClearAllPoints()
+        selfButton.vgIconTexture:SetPoint("CENTER", iconOffsetX, iconOffsetY)
+        selfButton.vgIconTexture:SetVertexColor(1, 1, 1, selfButton:IsEnabled() and iconAlpha or iconAlpha * 0.55)
+    end)
+    button:SetScript("OnMouseDown", function(selfButton, mouseButton)
+        if mouseButton ~= "LeftButton" or not selfButton:IsEnabled() then
+            return
+        end
+        selfButton.vgPressedTexture:Show()
+        selfButton.vgIconTexture:ClearAllPoints()
+        selfButton.vgIconTexture:SetPoint("CENTER", iconOffsetX, iconOffsetY - 1)
+    end)
+    button:SetScript("OnMouseUp", function(selfButton)
+        selfButton.vgPressedTexture:Hide()
+        selfButton.vgIconTexture:ClearAllPoints()
+        selfButton.vgIconTexture:SetPoint("CENTER", iconOffsetX, iconOffsetY)
+    end)
+
+    if type(onClick) == "function" then
+        button:SetScript("OnClick", onClick)
+    end
+
+    return button
 end
 
 -- Return ordered canonical hearthstone IDs.
@@ -759,11 +880,216 @@ function VesperGuild:OnInitialize()
         },
     }, true)
 
+    self.bagsDB = LibStub("AceDB-3.0"):New("VesperGuildBagsDB", {
+        profile = {
+            window = {
+                point = "CENTER",
+                relativePoint = "CENTER",
+                xOfs = 0,
+                yOfs = 0,
+                width = DEFAULT_BAGS_WINDOW_WIDTH,
+                height = DEFAULT_BAGS_WINDOW_HEIGHT,
+            },
+            bankWindow = {
+                point = "CENTER",
+                relativePoint = "CENTER",
+                xOfs = 0,
+                yOfs = 0,
+                width = DEFAULT_BANK_WINDOW_WIDTH,
+                height = DEFAULT_BANK_WINDOW_HEIGHT,
+            },
+            display = {
+                columns = DEFAULT_BAGS_COLUMNS,
+                itemIconSize = DEFAULT_BAGS_ITEM_ICON_SIZE,
+                stackCountFontSize = DEFAULT_BAGS_STACK_COUNT_FONT_SIZE,
+                itemLevelFontSize = DEFAULT_BAGS_ITEM_LEVEL_FONT_SIZE,
+                showEquippedBags = false,
+                showItemLevel = false,
+                qualityGlowIntensity = DEFAULT_BAGS_QUALITY_GLOW_INTENSITY,
+                combineStacks = false,
+            },
+            bankDisplay = {
+                columns = DEFAULT_BANK_COLUMNS,
+                itemIconSize = DEFAULT_BANK_ITEM_ICON_SIZE,
+                stackCountFontSize = DEFAULT_BANK_STACK_COUNT_FONT_SIZE,
+                itemLevelFontSize = DEFAULT_BANK_ITEM_LEVEL_FONT_SIZE,
+                showItemLevel = false,
+                qualityGlowIntensity = DEFAULT_BANK_QUALITY_GLOW_INTENSITY,
+                combineStacks = false,
+            },
+            lastViewedCharacterGUID = nil,
+            lastViewedBankView = "warband",
+            replaceBackpack = false,
+            replaceCharacterBank = false,
+            replaceAccountBank = false,
+        },
+        global = {
+            schemaVersion = 1,
+            charactersByGUID = {},
+            itemMeta = {},
+            accountIndex = {
+                itemOwners = {},
+                itemTotals = {},
+                categoryTotals = {},
+                categoryItems = {},
+            },
+            bank = {
+                charactersByGUID = {},
+                warband = {
+                    bags = {},
+                    itemTotals = {},
+                    categoryTotals = {},
+                    categoryItems = {},
+                    lastSeen = 0,
+                },
+            },
+        },
+    }, true)
+
     if self.db.profile and self.db.profile.minimap ~= nil then
         self.db.profile.minimap = nil
     end
 
     self:Print(L["ADDON_LOADED_MESSAGE"])
+end
+
+function VesperGuild:GetBagsDB()
+    return self.bagsDB
+end
+
+function VesperGuild:GetBagsProfile()
+    if not self.bagsDB then
+        return nil
+    end
+
+    local profile = self.bagsDB.profile or {}
+    self.bagsDB.profile = profile
+
+    profile.window = profile.window or {}
+    if type(profile.window.point) ~= "string" or profile.window.point == "" then
+        profile.window.point = "CENTER"
+    end
+    if type(profile.window.relativePoint) ~= "string" or profile.window.relativePoint == "" then
+        profile.window.relativePoint = "CENTER"
+    end
+    profile.window.xOfs = tonumber(profile.window.xOfs) or 0
+    profile.window.yOfs = tonumber(profile.window.yOfs) or 0
+    profile.window.width = math.max(480, math.floor((tonumber(profile.window.width) or DEFAULT_BAGS_WINDOW_WIDTH) + 0.5))
+    profile.window.height = math.max(220, math.floor((tonumber(profile.window.height) or DEFAULT_BAGS_WINDOW_HEIGHT) + 0.5))
+
+    profile.bankWindow = profile.bankWindow or {}
+    if type(profile.bankWindow.point) ~= "string" or profile.bankWindow.point == "" then
+        profile.bankWindow.point = "CENTER"
+    end
+    if type(profile.bankWindow.relativePoint) ~= "string" or profile.bankWindow.relativePoint == "" then
+        profile.bankWindow.relativePoint = "CENTER"
+    end
+    profile.bankWindow.xOfs = tonumber(profile.bankWindow.xOfs) or 0
+    profile.bankWindow.yOfs = tonumber(profile.bankWindow.yOfs) or 0
+    profile.bankWindow.width = math.max(480, math.floor((tonumber(profile.bankWindow.width) or DEFAULT_BANK_WINDOW_WIDTH) + 0.5))
+    profile.bankWindow.height = math.max(220, math.floor((tonumber(profile.bankWindow.height) or DEFAULT_BANK_WINDOW_HEIGHT) + 0.5))
+
+    profile.display = profile.display or {}
+    profile.display.columns = math.max(1, math.min(20, math.floor((tonumber(profile.display.columns) or DEFAULT_BAGS_COLUMNS) + 0.5)))
+    profile.display.itemIconSize = math.max(24, math.min(56, math.floor((tonumber(profile.display.itemIconSize) or DEFAULT_BAGS_ITEM_ICON_SIZE) + 0.5)))
+    profile.display.stackCountFontSize = math.max(8, math.min(20, math.floor((tonumber(profile.display.stackCountFontSize) or DEFAULT_BAGS_STACK_COUNT_FONT_SIZE) + 0.5)))
+    profile.display.itemLevelFontSize = math.max(8, math.min(18, math.floor((tonumber(profile.display.itemLevelFontSize) or DEFAULT_BAGS_ITEM_LEVEL_FONT_SIZE) + 0.5)))
+    profile.display.showEquippedBags = profile.display.showEquippedBags and true or false
+    profile.display.showItemLevel = profile.display.showItemLevel and true or false
+    profile.display.qualityGlowIntensity = math.max(0, math.min(1, tonumber(profile.display.qualityGlowIntensity) or DEFAULT_BAGS_QUALITY_GLOW_INTENSITY))
+    profile.display.combineStacks = profile.display.combineStacks and true or false
+    profile.bankDisplay = profile.bankDisplay or {}
+    profile.bankDisplay.columns = math.max(1, math.min(20, math.floor((tonumber(profile.bankDisplay.columns) or DEFAULT_BANK_COLUMNS) + 0.5)))
+    profile.bankDisplay.itemIconSize = math.max(24, math.min(56, math.floor((tonumber(profile.bankDisplay.itemIconSize) or DEFAULT_BANK_ITEM_ICON_SIZE) + 0.5)))
+    profile.bankDisplay.stackCountFontSize = math.max(8, math.min(20, math.floor((tonumber(profile.bankDisplay.stackCountFontSize) or DEFAULT_BANK_STACK_COUNT_FONT_SIZE) + 0.5)))
+    profile.bankDisplay.itemLevelFontSize = math.max(8, math.min(18, math.floor((tonumber(profile.bankDisplay.itemLevelFontSize) or DEFAULT_BANK_ITEM_LEVEL_FONT_SIZE) + 0.5)))
+    profile.bankDisplay.showItemLevel = profile.bankDisplay.showItemLevel and true or false
+    profile.bankDisplay.qualityGlowIntensity = math.max(0, math.min(1, tonumber(profile.bankDisplay.qualityGlowIntensity) or DEFAULT_BANK_QUALITY_GLOW_INTENSITY))
+    profile.bankDisplay.combineStacks = profile.bankDisplay.combineStacks and true or false
+    if type(profile.collapsedCategories) ~= "table" then
+        profile.collapsedCategories = {}
+    end
+    if type(profile.collapsedBankCategories) ~= "table" then
+        profile.collapsedBankCategories = {}
+    end
+
+    if type(profile.lastViewedCharacterGUID) ~= "string" or profile.lastViewedCharacterGUID == "" then
+        profile.lastViewedCharacterGUID = nil
+    end
+    if profile.lastViewedBankView ~= "character" and profile.lastViewedBankView ~= "warband" then
+        profile.lastViewedBankView = "warband"
+    end
+
+    profile.replaceBackpack = profile.replaceBackpack and true or false
+    profile.replaceCharacterBank = profile.replaceCharacterBank and true or false
+    profile.replaceAccountBank = profile.replaceAccountBank and true or false
+
+    return profile
+end
+
+function VesperGuild:GetCurrentCharacterGUID()
+    local guid = UnitGUID("player")
+    if type(guid) == "string" and guid ~= "" then
+        return guid
+    end
+
+    local name = UnitName("player") or UNKNOWN
+    local realm = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName() or "UnknownRealm"
+    return string.format("name:%s-%s", name, realm)
+end
+
+function VesperGuild:GetCurrentCharacterFullName()
+    local name = UnitName("player") or UNKNOWN
+    local realm = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName() or "UnknownRealm"
+    return string.format("%s-%s", name, realm)
+end
+
+function VesperGuild:GetCharacterBagSnapshot(characterKey)
+    local BagsStore = self:GetModule("BagsStore", true)
+    if not BagsStore then
+        return nil
+    end
+    return BagsStore:GetCharacterBagSnapshot(characterKey)
+end
+
+function VesperGuild:GetCharacterItemCount(characterKey, itemID)
+    local BagsStore = self:GetModule("BagsStore", true)
+    if not BagsStore then
+        return 0
+    end
+    return BagsStore:GetCharacterItemCount(characterKey, itemID)
+end
+
+function VesperGuild:GetAccountItemOwners(itemID)
+    local BagsStore = self:GetModule("BagsStore", true)
+    if not BagsStore then
+        return nil
+    end
+    return BagsStore:GetAccountItemOwners(itemID)
+end
+
+function VesperGuild:GetCharacterCategoryItems(characterKey, categoryKey)
+    local BagsStore = self:GetModule("BagsStore", true)
+    if not BagsStore then
+        return {}
+    end
+    return BagsStore:GetCharacterCategoryItems(characterKey, categoryKey)
+end
+
+function VesperGuild:GetAccountCategoryItems(categoryKey)
+    local BagsStore = self:GetModule("BagsStore", true)
+    if not BagsStore then
+        return nil
+    end
+    return BagsStore:GetAccountCategoryItems(categoryKey)
+end
+
+function VesperGuild:MarkFullCarryRescan(reason)
+    local BagsStore = self:GetModule("BagsStore", true)
+    if not BagsStore then
+        return
+    end
+    BagsStore:MarkFullCarryRescan(reason)
 end
 
 function VesperGuild:GetOnlineGuildMembers()
@@ -947,6 +1273,20 @@ function VesperGuild:HandleChatCommand(input)
     elseif loweredInput == "config" or loweredInput == "options" then
         -- Keep both aliases for convenience and discoverability.
         self:OpenConfig()
+    elseif loweredInput == "bags" then
+        local BagsWindow = self:GetModule("BagsWindow", true)
+        if BagsWindow and type(BagsWindow.Toggle) == "function" then
+            BagsWindow:Toggle()
+        else
+            self:Print(L["BAGS_WINDOW_MODULE_NOT_FOUND"])
+        end
+    elseif loweredInput == "bank" then
+        local BankWindow = self:GetModule("BankWindow", true)
+        if BankWindow and type(BankWindow.Toggle) == "function" then
+            BankWindow:Toggle()
+        else
+            self:Print(L["BANK_WINDOW_MODULE_NOT_FOUND"])
+        end
     elseif loweredInput == "reset" then
         -- Reset icon position
         self.db.profile.icon = { point = "CENTER", x = 0, y = 0 }
@@ -970,6 +1310,40 @@ function VesperGuild:HandleChatCommand(input)
         if portalFrame then
             portalFrame:ClearAllPoints()
             portalFrame:SetPoint("LEFT", UIParent, "CENTER", 250, 0)
+        end
+
+        local bagsProfile = self:GetBagsProfile()
+        if bagsProfile then
+            bagsProfile.window = {
+                point = "CENTER",
+                relativePoint = "CENTER",
+                xOfs = 0,
+                yOfs = 0,
+                width = DEFAULT_BAGS_WINDOW_WIDTH,
+                height = DEFAULT_BAGS_WINDOW_HEIGHT,
+            }
+            bagsProfile.bankWindow = {
+                point = "CENTER",
+                relativePoint = "CENTER",
+                xOfs = 0,
+                yOfs = 0,
+                width = DEFAULT_BANK_WINDOW_WIDTH,
+                height = DEFAULT_BANK_WINDOW_HEIGHT,
+            }
+        end
+
+        local bagsFrame = _G["VesperGuildBagsWindow"]
+        if bagsFrame then
+            bagsFrame:ClearAllPoints()
+            bagsFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            bagsFrame:SetSize(DEFAULT_BAGS_WINDOW_WIDTH, DEFAULT_BAGS_WINDOW_HEIGHT)
+        end
+
+        local bankFrame = _G["VesperGuildBankWindow"]
+        if bankFrame then
+            bankFrame:ClearAllPoints()
+            bankFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            bankFrame:SetSize(DEFAULT_BANK_WINDOW_WIDTH, DEFAULT_BANK_WINDOW_HEIGHT)
         end
 
         self:Print(L["ALL_FRAME_POSITIONS_RESET"])

@@ -2,8 +2,8 @@
 ## Title: VesperGuildRoster
 ## Notes: Guild M+ helper.
 ## Author: dPanta
-## Version: 1.5.1
-## SavedVariables: VesperGuildDB
+## Version: 2.0.0
+## SavedVariables: VesperGuildDB, VesperGuildBagsDB
 ## X-Wago-ID: XKqAw8Ky
 
 ## OptionalDeps: Ace3
@@ -44,3 +44,8 @@ Modules\Roster.lua
 Modules\Portals.lua
 Modules\Configuration.lua
 Modules\Automation.lua
+Modules\BagsStore.lua
+Modules\BagsWindow.lua
+Modules\BagsBridge.lua
+Modules\BankStore.lua
+Modules\BankWindow.lua

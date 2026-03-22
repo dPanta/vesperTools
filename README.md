@@ -19,6 +19,13 @@ Simple addon to manage your guild m+ runs.
     - Configurable:
       - Hearthstone variant.
       - Toy selection whitelist.
+- Bag / Bank / Warband bank replacement
+  - Option to replace default blizzard bags
+  - Predefined categories
+  - Item stacks combining
+  - Internal DB for all your character inventories on the same account
+    - Switch between character inventories in bag window dropdown menu directly
+  - Offline bank/warband bank access (read only ofc)
 
 # How to use
 - Icon with a sheep appears after installation

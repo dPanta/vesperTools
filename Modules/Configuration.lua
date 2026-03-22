@@ -7,7 +7,7 @@ local L = VesperGuild.L
 -- 2) Persist style options (font + frame opacities) into profile DB.
 -- 3) Broadcast a single refresh message consumed by UI modules.
 local WINDOW_WIDTH = 460
-local WINDOW_HEIGHT = 520
+local WINDOW_HEIGHT = 660
 local DEFAULT_ICON_TEXTURE = "Interface\\Icons\\INV_Misc_QuestionMark"
 local TOY_MENU_ROW_HEIGHT = 22
 local TOY_MENU_MAX_VISIBLE_ROWS = 10
@@ -120,6 +120,10 @@ local function ensureProfile()
     return profile
 end
 
+local function ensureBagsProfile()
+    return VesperGuild:GetBagsProfile()
+end
+
 -- Module state bootstrap.
 function Configuration:OnInitialize()
     self.panel = nil
@@ -138,6 +142,20 @@ function Configuration:OnInitialize()
     self.toyNameAddButton = nil
     self.toyLookupStatusText = nil
     self.utilityButtonSizeSlider = nil
+    self.bagsColumnsSlider = nil
+    self.bagsIconSizeSlider = nil
+    self.bagsStackCountFontSizeSlider = nil
+    self.bagsItemLevelFontSizeSlider = nil
+    self.bagsQualityGlowSlider = nil
+    self.bagsReplaceBlizzardCheckbox = nil
+    self.bagsShowItemLevelCheckbox = nil
+    self.bankColumnsSlider = nil
+    self.bankIconSizeSlider = nil
+    self.bankStackCountFontSizeSlider = nil
+    self.bankItemLevelFontSizeSlider = nil
+    self.bankQualityGlowSlider = nil
+    self.bankShowItemLevelCheckbox = nil
+    self.bankReplaceBlizzardCheckbox = nil
     self.opacitySliders = {}
     self.fontSizeSliders = {}
     self._isRefreshing = false
@@ -230,6 +248,60 @@ function Configuration:CreateUtilityButtonSizeSlider(name, parent, labelText, an
     return slider
 end
 
+-- Create a standardized integer slider with explicit min/max labels.
+function Configuration:CreateIntegerSlider(name, parent, labelText, anchor, yOffset, minValue, maxValue)
+    local slider = CreateFrame("Slider", name, parent, "OptionsSliderTemplate")
+    slider:SetWidth(290)
+    slider:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOffset)
+    slider:SetMinMaxValues(minValue, maxValue)
+    slider:SetValueStep(1)
+    slider:SetObeyStepOnDrag(true)
+
+    local low = _G[name .. "Low"]
+    local high = _G[name .. "High"]
+    local text = _G[name .. "Text"]
+
+    if low then
+        setFontStringTextSafe(low, tostring(minValue), 10, "", GameFontNormalSmall)
+    end
+    if high then
+        setFontStringTextSafe(high, tostring(maxValue), 10, "", GameFontNormalSmall)
+    end
+    if text then
+        setFontStringTextSafe(text, "", 12, "", GameFontNormal)
+    end
+
+    slider._baseLabel = labelText
+    return slider
+end
+
+-- Create a percentage slider used for visual intensity controls.
+function Configuration:CreatePercentSlider(name, parent, labelText, anchor, yOffset, minValue, maxValue, step)
+    local slider = CreateFrame("Slider", name, parent, "OptionsSliderTemplate")
+    slider:SetWidth(290)
+    slider:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOffset)
+    slider:SetMinMaxValues(minValue, maxValue)
+    slider:SetValueStep(step or 0.05)
+    slider:SetObeyStepOnDrag(true)
+
+    local low = _G[name .. "Low"]
+    local high = _G[name .. "High"]
+    local text = _G[name .. "Text"]
+
+    if low then
+        setFontStringTextSafe(low, string.format("%d%%", math.floor(((minValue or 0) * 100) + 0.5)), 10, "", GameFontNormalSmall)
+    end
+    if high then
+        setFontStringTextSafe(high, string.format("%d%%", math.floor(((maxValue or 1) * 100) + 0.5)), 10, "", GameFontNormalSmall)
+    end
+    if text then
+        setFontStringTextSafe(text, "", 12, "", GameFontNormal)
+    end
+
+    slider._baseLabel = labelText
+    return slider
+end
+
 -- Keep slider title in sync with current numeric value.
 function Configuration:UpdateSliderLabel(slider)
     if not slider then
@@ -286,6 +358,61 @@ function Configuration:UpdateUtilityButtonSizeSliderLabel(slider)
             GameFontNormal
         )
     end
+end
+
+-- Keep integer slider title in sync with its selected value.
+function Configuration:UpdateIntegerSliderLabel(slider)
+    if not slider then
+        return
+    end
+
+    local value = math.floor((tonumber(slider:GetValue()) or 0) + 0.5)
+    local text = _G[slider:GetName() .. "Text"]
+    if text then
+        setFontStringTextSafe(
+            text,
+            string.format("%s: %d", slider._baseLabel or "", value),
+            12,
+            "",
+            GameFontNormal
+        )
+    end
+end
+
+-- Keep percentage slider title in sync with its selected value.
+function Configuration:UpdatePercentSliderLabel(slider)
+    if not slider then
+        return
+    end
+
+    local value = tonumber(slider:GetValue()) or 0
+    local percent = math.floor((value * 100) + 0.5)
+    local text = _G[slider:GetName() .. "Text"]
+    if text then
+        setFontStringTextSafe(
+            text,
+            string.format("%s: %d%%", slider._baseLabel or "", percent),
+            12,
+            "",
+            GameFontNormal
+        )
+    end
+end
+
+-- Create a reusable checkbox with an inline text label.
+function Configuration:CreateCheckButton(name, parent, labelText, anchor, yOffset)
+    local checkbox = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate")
+    checkbox:SetSize(24, 24)
+    checkbox:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -4, yOffset)
+
+    local text = checkbox.text or _G[name .. "Text"]
+    if text then
+        text:ClearAllPoints()
+        text:SetPoint("LEFT", checkbox, "RIGHT", 4, 1)
+        setFontStringTextSafe(text, labelText, 12, "", GameFontNormal)
+    end
+
+    return checkbox
 end
 
 -- Create a flat dropdown-like button reused by multiple controls.
@@ -1123,33 +1250,17 @@ function Configuration:BuildPanel()
         panel:StopMovingOrSizing()
     end)
 
-    -- Flat custom close button (instead of Blizzard template) to match style.
-    local closeButton = CreateFrame("Button", nil, panel)
-    closeButton:SetSize(22, 22)
-    closeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -6)
-
-    local closeNormal = closeButton:CreateTexture(nil, "BACKGROUND")
-    closeNormal:SetAllPoints()
-    closeNormal:SetColorTexture(1, 1, 1, 0.06)
-
-    local closeHover = closeButton:CreateTexture(nil, "ARTWORK")
-    closeHover:SetAllPoints()
-    closeHover:SetColorTexture(1, 1, 1, 0.14)
-    closeHover:Hide()
-
-    local closeLabel = closeButton:CreateFontString(nil, "OVERLAY")
-    closeLabel:SetPoint("CENTER", 0, 0)
-    setFontStringTextSafe(closeLabel, "x", 12, "OUTLINE", GameFontHighlightSmall)
-
-    closeButton:SetScript("OnEnter", function()
-        closeHover:Show()
-    end)
-    closeButton:SetScript("OnLeave", function()
-        closeHover:Hide()
-    end)
-    closeButton:SetScript("OnClick", function()
+    local closeButton = VesperGuild:CreateModernCloseButton(panel, function()
         panel:Hide()
-    end)
+    end, {
+        size = 22,
+        iconScale = 0.5,
+        backgroundAlpha = 0.05,
+        borderAlpha = 0.08,
+        hoverAlpha = 0.14,
+        pressedAlpha = 0.2,
+    })
+    closeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -6)
 
     -- Window headings.
     local title = panel:CreateFontString(nil, "ARTWORK")
@@ -1178,13 +1289,15 @@ function Configuration:BuildPanel()
     local fontText = fontDropdown.Text
 
     -- Tab row: each frame now has its own settings pane.
-    local rosterTabButton = self:CreateTabButton(panel, "roster", L["CONFIG_TAB_ROSTER"], fontDropdown, 0, -20, 136)
-    self:CreateTabButton(panel, "portals", L["CONFIG_TAB_PORTALS"], fontDropdown, 142, -20, 136)
-    local bestKeysTabButton = self:CreateTabButton(panel, "bestKeys", L["CONFIG_TAB_BEST_KEYS"], fontDropdown, 284, -20, 136)
+    local rosterTabButton = self:CreateTabButton(panel, "roster", L["CONFIG_TAB_ROSTER"], fontDropdown, 0, -20, 84)
+    self:CreateTabButton(panel, "portals", L["CONFIG_TAB_PORTALS"], fontDropdown, 86, -20, 84)
+    self:CreateTabButton(panel, "bestKeys", L["CONFIG_TAB_BEST_KEYS"], fontDropdown, 172, -20, 84)
+    self:CreateTabButton(panel, "bags", L["CONFIG_TAB_BAGS"], fontDropdown, 258, -20, 84)
+    local bankTabButton = self:CreateTabButton(panel, "bank", L["CONFIG_TAB_BANK"], fontDropdown, 344, -20, 84)
 
     local contentRoot = CreateFrame("Frame", nil, panel)
     contentRoot:SetPoint("TOPLEFT", rosterTabButton, "BOTTOMLEFT", 0, -10)
-    contentRoot:SetPoint("TOPRIGHT", bestKeysTabButton, "BOTTOMRIGHT", 0, -10)
+    contentRoot:SetPoint("TOPRIGHT", bankTabButton, "BOTTOMRIGHT", 0, -10)
     contentRoot:SetPoint("BOTTOM", panel, "BOTTOM", 0, 14)
 
     -- Separate content containers are shown/hidden by active tab state.
@@ -1197,9 +1310,17 @@ function Configuration:BuildPanel()
     local bestKeysTab = CreateFrame("Frame", nil, contentRoot)
     bestKeysTab:SetAllPoints()
 
+    local bagsTab = CreateFrame("Frame", nil, contentRoot)
+    bagsTab:SetAllPoints()
+
+    local bankTab = CreateFrame("Frame", nil, contentRoot)
+    bankTab:SetAllPoints()
+
     self.tabFrames.roster = rosterTab
     self.tabFrames.portals = portalsTab
     self.tabFrames.bestKeys = bestKeysTab
+    self.tabFrames.bags = bagsTab
+    self.tabFrames.bank = bankTab
 
     local rosterSectionTitle = rosterTab:CreateFontString(nil, "ARTWORK")
     rosterSectionTitle:SetPoint("TOPLEFT", 0, -2)
@@ -1337,6 +1458,136 @@ function Configuration:BuildPanel()
         -30
     )
 
+    local bagsSectionTitle = bagsTab:CreateFontString(nil, "ARTWORK")
+    bagsSectionTitle:SetPoint("TOPLEFT", 0, -2)
+    setFontStringTextSafe(bagsSectionTitle, L["CONFIG_SECTION_BAGS_WINDOW"], 13, "OUTLINE", GameFontHighlight)
+
+    local bagsColumnsSlider = self:CreateIntegerSlider(
+        "VesperGuildConfigBagsColumnsSlider",
+        bagsTab,
+        L["CONFIG_BAGS_COLUMNS"],
+        bagsSectionTitle,
+        -16,
+        1,
+        20
+    )
+    local bagsIconSizeSlider = self:CreateIntegerSlider(
+        "VesperGuildConfigBagsIconSizeSlider",
+        bagsTab,
+        L["CONFIG_BAGS_ICON_SIZE"],
+        bagsColumnsSlider,
+        -30,
+        24,
+        56
+    )
+    local bagsStackCountFontSizeSlider = self:CreateIntegerSlider(
+        "VesperGuildConfigBagsStackCountFontSizeSlider",
+        bagsTab,
+        L["CONFIG_BAGS_STACK_COUNT_FONT_SIZE"],
+        bagsIconSizeSlider,
+        -30,
+        8,
+        20
+    )
+    local bagsItemLevelFontSizeSlider = self:CreateIntegerSlider(
+        "VesperGuildConfigBagsItemLevelFontSizeSlider",
+        bagsTab,
+        L["CONFIG_BAGS_ILVL_FONT_SIZE"],
+        bagsStackCountFontSizeSlider,
+        -30,
+        8,
+        18
+    )
+    local bagsShowItemLevelCheckbox = self:CreateCheckButton(
+        "VesperGuildConfigBagsShowItemLevelCheckbox",
+        bagsTab,
+        L["CONFIG_BAGS_SHOW_ITEM_LEVEL"],
+        bagsItemLevelFontSizeSlider,
+        -30
+    )
+    local bagsQualityGlowSlider = self:CreatePercentSlider(
+        "VesperGuildConfigBagsQualityGlowSlider",
+        bagsTab,
+        L["CONFIG_BAGS_QUALITY_GLOW"],
+        bagsShowItemLevelCheckbox,
+        -24,
+        0,
+        1,
+        0.05
+    )
+    local bagsReplaceBlizzardCheckbox = self:CreateCheckButton(
+        "VesperGuildConfigBagsReplaceBlizzardCheckbox",
+        bagsTab,
+        L["CONFIG_BAGS_REPLACE_BLIZZARD"],
+        bagsQualityGlowSlider,
+        -30
+    )
+
+    local bankSectionTitle = bankTab:CreateFontString(nil, "ARTWORK")
+    bankSectionTitle:SetPoint("TOPLEFT", 0, -2)
+    setFontStringTextSafe(bankSectionTitle, L["CONFIG_SECTION_BANK_WINDOW"], 13, "OUTLINE", GameFontHighlight)
+
+    local bankColumnsSlider = self:CreateIntegerSlider(
+        "VesperGuildConfigBankColumnsSlider",
+        bankTab,
+        L["CONFIG_BANK_COLUMNS"],
+        bankSectionTitle,
+        -16,
+        1,
+        20
+    )
+    local bankIconSizeSlider = self:CreateIntegerSlider(
+        "VesperGuildConfigBankIconSizeSlider",
+        bankTab,
+        L["CONFIG_BANK_ICON_SIZE"],
+        bankColumnsSlider,
+        -30,
+        24,
+        56
+    )
+    local bankStackCountFontSizeSlider = self:CreateIntegerSlider(
+        "VesperGuildConfigBankStackCountFontSizeSlider",
+        bankTab,
+        L["CONFIG_BANK_STACK_COUNT_FONT_SIZE"],
+        bankIconSizeSlider,
+        -30,
+        8,
+        20
+    )
+    local bankItemLevelFontSizeSlider = self:CreateIntegerSlider(
+        "VesperGuildConfigBankItemLevelFontSizeSlider",
+        bankTab,
+        L["CONFIG_BANK_ILVL_FONT_SIZE"],
+        bankStackCountFontSizeSlider,
+        -30,
+        8,
+        18
+    )
+    local bankShowItemLevelCheckbox = self:CreateCheckButton(
+        "VesperGuildConfigBankShowItemLevelCheckbox",
+        bankTab,
+        L["CONFIG_BANK_SHOW_ITEM_LEVEL"],
+        bankItemLevelFontSizeSlider,
+        -30
+    )
+    local bankQualityGlowSlider = self:CreatePercentSlider(
+        "VesperGuildConfigBankQualityGlowSlider",
+        bankTab,
+        L["CONFIG_BANK_QUALITY_GLOW"],
+        bankShowItemLevelCheckbox,
+        -24,
+        0,
+        1,
+        0.05
+    )
+    local bankReplaceBlizzardCheckbox = self:CreateCheckButton(
+        "VesperGuildConfigBankReplaceBlizzardCheckbox",
+        bankTab,
+        L["CONFIG_BANK_REPLACE_BLIZZARD"],
+        bankQualityGlowSlider,
+        -30
+    )
+
     self.opacitySliders.roster = rosterOpacitySlider
     self.opacitySliders.portals = portalsOpacitySlider
     self.opacitySliders.bestKeys = bestKeysOpacitySlider
@@ -1407,6 +1658,92 @@ function Configuration:BuildPanel()
         end)
     end
 
+    -- Live-write integer bag display values stored in the separate bags profile DB.
+    local function bindInventoryIntegerSlider(slider, displayRootKey, fieldKey, minValue, maxValue)
+        slider:SetScript("OnValueChanged", function(changedSlider, value)
+            local bagsProfile = ensureBagsProfile()
+            if not bagsProfile then
+                return
+            end
+            local normalized = clamp(math.floor((tonumber(value) or minValue) + 0.5), minValue, maxValue)
+            if math.abs(normalized - value) > 0.0001 then
+                changedSlider:SetValue(normalized)
+                return
+            end
+            bagsProfile[displayRootKey] = bagsProfile[displayRootKey] or {}
+            bagsProfile[displayRootKey][fieldKey] = normalized
+            self:UpdateIntegerSliderLabel(changedSlider)
+            if not self._isRefreshing then
+                self:NotifyConfigChanged()
+            end
+        end)
+    end
+
+    -- Live-write inventory glow intensity as a normalized 0..1 value.
+    local function bindInventoryPercentSlider(slider, displayRootKey, fieldKey)
+        slider:SetScript("OnValueChanged", function(changedSlider, value)
+            local bagsProfile = ensureBagsProfile()
+            if not bagsProfile then
+                return
+            end
+            local normalized = clamp(roundToStep(tonumber(value) or 0, 0.05), 0, 1)
+            if math.abs(normalized - value) > 0.0001 then
+                changedSlider:SetValue(normalized)
+                return
+            end
+            bagsProfile[displayRootKey] = bagsProfile[displayRootKey] or {}
+            bagsProfile[displayRootKey][fieldKey] = normalized
+            self:UpdatePercentSliderLabel(changedSlider)
+            if not self._isRefreshing then
+                self:NotifyConfigChanged()
+            end
+        end)
+    end
+
+    -- Toggle item-level overlays in the inventory windows.
+    local function bindInventoryCheckBox(checkbox, displayRootKey, fieldKey)
+        checkbox:SetScript("OnClick", function(changedCheckbox)
+            local bagsProfile = ensureBagsProfile()
+            if not bagsProfile then
+                return
+            end
+            bagsProfile[displayRootKey] = bagsProfile[displayRootKey] or {}
+            bagsProfile[displayRootKey][fieldKey] = changedCheckbox:GetChecked() and true or false
+            if not self._isRefreshing then
+                self:NotifyConfigChanged()
+            end
+        end)
+    end
+
+    local function bindBagsFlagCheckBox(checkbox, fieldKey)
+        checkbox:SetScript("OnClick", function(changedCheckbox)
+            local bagsProfile = ensureBagsProfile()
+            if not bagsProfile then
+                return
+            end
+            bagsProfile[fieldKey] = changedCheckbox:GetChecked() and true or false
+            if not self._isRefreshing then
+                self:NotifyConfigChanged()
+            end
+        end)
+    end
+
+    local function bindBankReplacementCheckBox(checkbox)
+        checkbox:SetScript("OnClick", function(changedCheckbox)
+            local bagsProfile = ensureBagsProfile()
+            if not bagsProfile then
+                return
+            end
+
+            local enabled = changedCheckbox:GetChecked() and true or false
+            bagsProfile.replaceCharacterBank = enabled
+            bagsProfile.replaceAccountBank = enabled
+            if not self._isRefreshing then
+                self:NotifyConfigChanged()
+            end
+        end)
+    end
+
     bindOpacitySlider(rosterOpacitySlider, "roster")
     bindOpacitySlider(portalsOpacitySlider, "portals")
     bindOpacitySlider(bestKeysOpacitySlider, "bestKeys")
@@ -1415,6 +1752,20 @@ function Configuration:BuildPanel()
     bindFontSizeSlider(portalsFontSizeSlider, "portals")
     bindFontSizeSlider(bestKeysFontSizeSlider, "bestKeys")
     bindUtilityButtonSizeSlider(utilityButtonSizeSlider)
+    bindInventoryIntegerSlider(bagsColumnsSlider, "display", "columns", 1, 20)
+    bindInventoryIntegerSlider(bagsIconSizeSlider, "display", "itemIconSize", 24, 56)
+    bindInventoryIntegerSlider(bagsStackCountFontSizeSlider, "display", "stackCountFontSize", 8, 20)
+    bindInventoryIntegerSlider(bagsItemLevelFontSizeSlider, "display", "itemLevelFontSize", 8, 18)
+    bindInventoryPercentSlider(bagsQualityGlowSlider, "display", "qualityGlowIntensity")
+    bindInventoryCheckBox(bagsShowItemLevelCheckbox, "display", "showItemLevel")
+    bindBagsFlagCheckBox(bagsReplaceBlizzardCheckbox, "replaceBackpack")
+    bindInventoryIntegerSlider(bankColumnsSlider, "bankDisplay", "columns", 1, 20)
+    bindInventoryIntegerSlider(bankIconSizeSlider, "bankDisplay", "itemIconSize", 24, 56)
+    bindInventoryIntegerSlider(bankStackCountFontSizeSlider, "bankDisplay", "stackCountFontSize", 8, 20)
+    bindInventoryIntegerSlider(bankItemLevelFontSizeSlider, "bankDisplay", "itemLevelFontSize", 8, 18)
+    bindInventoryPercentSlider(bankQualityGlowSlider, "bankDisplay", "qualityGlowIntensity")
+    bindInventoryCheckBox(bankShowItemLevelCheckbox, "bankDisplay", "showItemLevel")
+    bindBankReplacementCheckBox(bankReplaceBlizzardCheckbox)
 
     panel:SetScript("OnShow", function()
         self:SetActiveTab(self.activeTab or "roster")
@@ -1437,13 +1788,28 @@ function Configuration:BuildPanel()
     self.toyNameAddButton = toyAddButton
     self.toyLookupStatusText = toyLookupStatusText
     self.utilityButtonSizeSlider = utilityButtonSizeSlider
+    self.bagsColumnsSlider = bagsColumnsSlider
+    self.bagsIconSizeSlider = bagsIconSizeSlider
+    self.bagsStackCountFontSizeSlider = bagsStackCountFontSizeSlider
+    self.bagsItemLevelFontSizeSlider = bagsItemLevelFontSizeSlider
+    self.bagsQualityGlowSlider = bagsQualityGlowSlider
+    self.bagsReplaceBlizzardCheckbox = bagsReplaceBlizzardCheckbox
+    self.bagsShowItemLevelCheckbox = bagsShowItemLevelCheckbox
+    self.bankColumnsSlider = bankColumnsSlider
+    self.bankIconSizeSlider = bankIconSizeSlider
+    self.bankStackCountFontSizeSlider = bankStackCountFontSizeSlider
+    self.bankItemLevelFontSizeSlider = bankItemLevelFontSizeSlider
+    self.bankQualityGlowSlider = bankQualityGlowSlider
+    self.bankShowItemLevelCheckbox = bankShowItemLevelCheckbox
+    self.bankReplaceBlizzardCheckbox = bankReplaceBlizzardCheckbox
     self:SetActiveTab(self.activeTab or "roster")
 end
 
 -- Pull profile values into controls without rebroadcasting updates.
 function Configuration:RefreshControls()
     local profile = ensureProfile()
-    if not profile then
+    local bagsProfile = ensureBagsProfile()
+    if not profile or not bagsProfile then
         return
     end
 
@@ -1466,6 +1832,20 @@ function Configuration:RefreshControls()
         minUtilityButtonSize,
         maxUtilityButtonSize
     )
+    local bagsColumns = clamp(math.floor((tonumber(bagsProfile.display.columns) or 10) + 0.5), 1, 20)
+    local bagsIconSize = clamp(math.floor((tonumber(bagsProfile.display.itemIconSize) or 38) + 0.5), 24, 56)
+    local bagsStackCountFontSize = clamp(math.floor((tonumber(bagsProfile.display.stackCountFontSize) or 11) + 0.5), 8, 20)
+    local bagsItemLevelFontSize = clamp(math.floor((tonumber(bagsProfile.display.itemLevelFontSize) or 9) + 0.5), 8, 18)
+    local bagsQualityGlow = clamp(tonumber(bagsProfile.display.qualityGlowIntensity) or 0.65, 0, 1)
+    local bagsReplaceBlizzard = bagsProfile.replaceBackpack and true or false
+    local bagsShowItemLevel = bagsProfile.display.showItemLevel and true or false
+    local bankColumns = clamp(math.floor((tonumber(bagsProfile.bankDisplay.columns) or 10) + 0.5), 1, 20)
+    local bankIconSize = clamp(math.floor((tonumber(bagsProfile.bankDisplay.itemIconSize) or 38) + 0.5), 24, 56)
+    local bankStackCountFontSize = clamp(math.floor((tonumber(bagsProfile.bankDisplay.stackCountFontSize) or 11) + 0.5), 8, 20)
+    local bankItemLevelFontSize = clamp(math.floor((tonumber(bagsProfile.bankDisplay.itemLevelFontSize) or 9) + 0.5), 8, 18)
+    local bankQualityGlow = clamp(tonumber(bagsProfile.bankDisplay.qualityGlowIntensity) or 0.65, 0, 1)
+    local bankShowItemLevel = bagsProfile.bankDisplay.showItemLevel and true or false
+    local bankReplaceBlizzard = (bagsProfile.replaceCharacterBank or bagsProfile.replaceAccountBank) and true or false
 
     if self.opacitySliders.roster then
         self.opacitySliders.roster:SetValue(rosterValue)
@@ -1494,6 +1874,58 @@ function Configuration:RefreshControls()
     if self.utilityButtonSizeSlider then
         self.utilityButtonSizeSlider:SetValue(utilityButtonSize)
         self:UpdateUtilityButtonSizeSliderLabel(self.utilityButtonSizeSlider)
+    end
+    if self.bagsColumnsSlider then
+        self.bagsColumnsSlider:SetValue(bagsColumns)
+        self:UpdateIntegerSliderLabel(self.bagsColumnsSlider)
+    end
+    if self.bagsIconSizeSlider then
+        self.bagsIconSizeSlider:SetValue(bagsIconSize)
+        self:UpdateIntegerSliderLabel(self.bagsIconSizeSlider)
+    end
+    if self.bagsStackCountFontSizeSlider then
+        self.bagsStackCountFontSizeSlider:SetValue(bagsStackCountFontSize)
+        self:UpdateIntegerSliderLabel(self.bagsStackCountFontSizeSlider)
+    end
+    if self.bagsItemLevelFontSizeSlider then
+        self.bagsItemLevelFontSizeSlider:SetValue(bagsItemLevelFontSize)
+        self:UpdateIntegerSliderLabel(self.bagsItemLevelFontSizeSlider)
+    end
+    if self.bagsQualityGlowSlider then
+        self.bagsQualityGlowSlider:SetValue(bagsQualityGlow)
+        self:UpdatePercentSliderLabel(self.bagsQualityGlowSlider)
+    end
+    if self.bagsReplaceBlizzardCheckbox then
+        self.bagsReplaceBlizzardCheckbox:SetChecked(bagsReplaceBlizzard)
+    end
+    if self.bagsShowItemLevelCheckbox then
+        self.bagsShowItemLevelCheckbox:SetChecked(bagsShowItemLevel)
+    end
+    if self.bankColumnsSlider then
+        self.bankColumnsSlider:SetValue(bankColumns)
+        self:UpdateIntegerSliderLabel(self.bankColumnsSlider)
+    end
+    if self.bankIconSizeSlider then
+        self.bankIconSizeSlider:SetValue(bankIconSize)
+        self:UpdateIntegerSliderLabel(self.bankIconSizeSlider)
+    end
+    if self.bankStackCountFontSizeSlider then
+        self.bankStackCountFontSizeSlider:SetValue(bankStackCountFontSize)
+        self:UpdateIntegerSliderLabel(self.bankStackCountFontSizeSlider)
+    end
+    if self.bankItemLevelFontSizeSlider then
+        self.bankItemLevelFontSizeSlider:SetValue(bankItemLevelFontSize)
+        self:UpdateIntegerSliderLabel(self.bankItemLevelFontSizeSlider)
+    end
+    if self.bankQualityGlowSlider then
+        self.bankQualityGlowSlider:SetValue(bankQualityGlow)
+        self:UpdatePercentSliderLabel(self.bankQualityGlowSlider)
+    end
+    if self.bankShowItemLevelCheckbox then
+        self.bankShowItemLevelCheckbox:SetChecked(bankShowItemLevel)
+    end
+    if self.bankReplaceBlizzardCheckbox then
+        self.bankReplaceBlizzardCheckbox:SetChecked(bankReplaceBlizzard)
     end
 
     -- Keep toy name-add controls in sync with real toy availability.
