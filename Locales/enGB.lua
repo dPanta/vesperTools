@@ -101,6 +101,7 @@ local translations = {
     ROSTER_COLUMN_ZONE = "Zone",
     ROSTER_TITLE_FALLBACK = "Guild Roster",
     SLASH_COMMAND_HELP = "Open vesperTools window",
+    SEARCH_FOUND_FMT = "Found(%d)",
     STATUS_AFK = "AFK",
     STATUS_DND = "DND",
     STATUS_ONLINE = "Online",

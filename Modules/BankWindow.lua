@@ -7,7 +7,7 @@ local MIN_WINDOW_WIDTH = 480
 local MIN_WINDOW_HEIGHT = 220
 local DEFAULT_BUTTON_SIZE = 38
 local BUTTON_GAP = 6
-local SECTION_GAP = 18
+local SECTION_GAP = 10
 local HEADER_HEIGHT = 28
 local SUMMARY_GAP = 14
 local CONTENT_SIDE_PADDING = 8
@@ -15,9 +15,13 @@ local WINDOW_SCREEN_MARGIN = 48
 local WINDOW_CHROME_HEIGHT = 96
 local VIEW_DROPDOWN_WIDTH = 180
 local VIEW_DROPDOWN_HEIGHT = 22
+local CHARACTER_DROPDOWN_WIDTH = 220
 local VIEW_MENU_ROW_HEIGHT = 24
 local VIEW_MENU_PADDING = 4
 local VIEW_MENU_GAP = 4
+local CHARACTER_MENU_ROW_HEIGHT = 24
+local CHARACTER_MENU_PADDING = 4
+local CHARACTER_MENU_GAP = 4
 local HEADER_ACTION_BUTTON_HEIGHT = 22
 local HEADER_ACTION_BUTTON_GAP = 6
 local DEPOSIT_BUTTON_WIDTH = 72
@@ -27,6 +31,8 @@ local TITLEBAR_SEARCH_HEIGHT = 22
 local TITLEBAR_SEARCH_CLEAR_BUTTON_SIZE = 14
 local CATEGORY_TOGGLE_BUTTON_SIZE = 14
 local VIEW_DROPDOWN_ARROW_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\DropdownArrow-50"
+local NAV_LEFT_INSET = 10
+local NAV_RIGHT_INSET = 40
 
 local function clamp(value, minValue, maxValue)
     if value < minValue then
@@ -86,9 +92,16 @@ function BankWindow:OnInitialize()
     self.viewDropdown = nil
     self.viewDropdownText = nil
     self.viewDropdownArrow = nil
+    self.characterDropdown = nil
+    self.characterDropdownText = nil
+    self.characterDropdownMatchText = nil
+    self.characterDropdownArrow = nil
     self.viewMenu = nil
     self.viewMenuDismiss = nil
     self.viewMenuButtons = {}
+    self.characterMenu = nil
+    self.characterMenuDismiss = nil
+    self.characterMenuButtons = {}
     self.depositButton = nil
     self.depositButtonText = nil
     self.combineStacksButton = nil
@@ -100,7 +113,10 @@ function BankWindow:OnInitialize()
     self.itemButtons = {}
     self.summaryButtons = {}
     self.selectedViewType = "character"
+    self.selectedCharacterKey = nil
     self.displayViews = {}
+    self.displayCharacters = {}
+    self.characterSearchMatchCounts = nil
 end
 
 function BankWindow:OnEnable()
@@ -169,15 +185,42 @@ end
 function BankWindow:SelectDefaultViewForOpen(preferredViewKey)
     local store = self:GetStore()
     local bagsProfile = vesperTools:GetBagsProfile()
-    local resolvedViewKey = "warband"
+    local resolvedViewKey = preferredViewKey
+
+    if store and type(store.CreateOrUpdateCurrentCharacter) == "function" then
+        store:CreateOrUpdateCurrentCharacter()
+    end
+
+    if resolvedViewKey ~= "character" and resolvedViewKey ~= "warband" then
+        resolvedViewKey = bagsProfile and bagsProfile.lastViewedBankView or "warband"
+    end
+    if resolvedViewKey ~= "character" and resolvedViewKey ~= "warband" then
+        resolvedViewKey = "warband"
+    end
+
+    local displayCharacters = store and type(store.GetDisplayCharacters) == "function" and store:GetDisplayCharacters() or {}
+    local hasCharacterData = false
+    for i = 1, #displayCharacters do
+        if displayCharacters[i].hasSnapshot or displayCharacters[i].isLive then
+            hasCharacterData = true
+            break
+        end
+    end
 
     local warbandSnapshot = store and type(store.GetWarbandBankSnapshot) == "function" and store:GetWarbandBankSnapshot() or nil
     local warbandIsLive = store and type(store.IsWarbandBankLive) == "function" and store:IsWarbandBankLive() or false
     local warbandHasData = type(warbandSnapshot) == "table" and (tonumber(warbandSnapshot.lastSeen) or 0) > 0
-    if resolvedViewKey == "warband" and not warbandIsLive and not warbandHasData then
+    local hasWarbandData = warbandIsLive or warbandHasData
+
+    if resolvedViewKey == "warband" and not hasWarbandData and hasCharacterData then
+        resolvedViewKey = "character"
+    elseif resolvedViewKey == "character" and not hasCharacterData and hasWarbandData then
+        resolvedViewKey = "warband"
+    elseif not hasWarbandData and not hasCharacterData then
         resolvedViewKey = "character"
     end
 
+    self.displayCharacters = displayCharacters
     self.selectedViewType = resolvedViewKey == "warband" and "warband" or "character"
     if bagsProfile then
         bagsProfile.lastViewedBankView = self.selectedViewType
@@ -199,6 +242,89 @@ function BankWindow:ResolveSelectedView()
 
     self.selectedViewType = "character"
     return self.displayViews[1]
+end
+
+function BankWindow:ResolveSelectedCharacter()
+    local store = self:GetStore()
+    if not store then
+        self.displayCharacters = {}
+        self.selectedCharacterKey = nil
+        return nil
+    end
+
+    self.displayCharacters = type(store.GetDisplayCharacters) == "function" and store:GetDisplayCharacters() or {}
+    if #self.displayCharacters == 0 then
+        self.selectedCharacterKey = nil
+        return nil
+    end
+
+    local bagsProfile = vesperTools:GetBagsProfile()
+    local currentCharacterKey = store.GetCurrentCharacterKey and store:GetCurrentCharacterKey() or nil
+    local selectedKey = self.selectedCharacterKey or (bagsProfile and bagsProfile.lastViewedBankCharacterGUID) or currentCharacterKey
+
+    for i = 1, #self.displayCharacters do
+        if self.displayCharacters[i].key == selectedKey then
+            self.selectedCharacterKey = selectedKey
+            return self.displayCharacters[i]
+        end
+    end
+
+    for i = 1, #self.displayCharacters do
+        if self.displayCharacters[i].isCurrent then
+            self.selectedCharacterKey = self.displayCharacters[i].key
+            if bagsProfile then
+                bagsProfile.lastViewedBankCharacterGUID = self.selectedCharacterKey
+            end
+            return self.displayCharacters[i]
+        end
+    end
+
+    self.selectedCharacterKey = self.displayCharacters[1].key
+    if bagsProfile then
+        bagsProfile.lastViewedBankCharacterGUID = self.selectedCharacterKey
+    end
+    return self.displayCharacters[1]
+end
+
+function BankWindow:SetCharacterDropdownEnabled(isEnabled)
+    if not self.characterDropdown then
+        return
+    end
+
+    if isEnabled then
+        self.characterDropdown:Enable()
+        self.characterDropdown:SetAlpha(1)
+    else
+        self.characterDropdown:Disable()
+        self.characterDropdown:SetAlpha(0.5)
+    end
+end
+
+function BankWindow:UpdateCharacterDropdownVisual()
+    if not self.characterDropdown then
+        return
+    end
+
+    local isOpen = self.characterMenu and self.characterMenu:IsShown()
+    local backdropAlpha = isOpen and 0.98 or 0.92
+    self.characterDropdown:SetBackdropColor(0.08, 0.08, 0.1, backdropAlpha)
+    if self.characterDropdownArrow then
+        self.characterDropdownArrow:SetTexture(VIEW_DROPDOWN_ARROW_TEXTURE)
+        self.characterDropdownArrow:SetRotation(isOpen and math.pi or 0)
+    end
+end
+
+function BankWindow:SetSelectedCharacter(characterKey)
+    if type(characterKey) ~= "string" or characterKey == "" then
+        return
+    end
+
+    self.selectedCharacterKey = characterKey
+    local bagsProfile = vesperTools:GetBagsProfile()
+    if bagsProfile then
+        bagsProfile.lastViewedBankCharacterGUID = characterKey
+    end
+    self:RefreshWindow()
 end
 
 function BankWindow:SetViewDropdownEnabled(isEnabled)
@@ -235,6 +361,9 @@ function BankWindow:SetSelectedView(viewKey)
     end
 
     self.selectedViewType = viewKey
+    if viewKey ~= "character" then
+        self:HideCharacterMenu()
+    end
     local bagsProfile = vesperTools:GetBagsProfile()
     if bagsProfile then
         bagsProfile.lastViewedBankView = viewKey
@@ -253,6 +382,18 @@ function BankWindow:HideViewMenu()
     end
 
     self:UpdateViewDropdownVisual()
+end
+
+function BankWindow:HideCharacterMenu()
+    if self.characterMenu then
+        self.characterMenu:Hide()
+    end
+
+    if self.characterMenuDismiss then
+        self.characterMenuDismiss:Hide()
+    end
+
+    self:UpdateCharacterDropdownVisual()
 end
 
 function BankWindow:GetViewMenuFrames()
@@ -292,6 +433,43 @@ function BankWindow:GetViewMenuFrames()
     return self.viewMenu, self.viewMenuDismiss
 end
 
+function BankWindow:GetCharacterMenuFrames()
+    if not self.characterMenuDismiss then
+        local dismiss = CreateFrame("Button", nil, UIParent)
+        dismiss:SetAllPoints(UIParent)
+        dismiss:SetFrameStrata("TOOLTIP")
+        dismiss:SetToplevel(true)
+        dismiss:EnableMouse(true)
+        dismiss:SetScript("OnClick", function()
+            self:HideCharacterMenu()
+        end)
+        dismiss:Hide()
+        self.characterMenuDismiss = dismiss
+    end
+
+    if not self.characterMenu then
+        local menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        menu:SetClampedToScreen(true)
+        menu:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        menu:SetBackdropColor(0.06, 0.06, 0.08, 0.98)
+        menu:SetBackdropBorderColor(1, 1, 1, 0.12)
+        menu:SetFrameStrata("TOOLTIP")
+        menu:SetToplevel(true)
+        menu:Hide()
+        self.characterMenu = menu
+    end
+
+    local baseLevel = math.max(90, (self.frame and self.frame:GetFrameLevel() or 0) + 60)
+    self.characterMenuDismiss:SetFrameLevel(baseLevel - 1)
+    self.characterMenu:SetFrameLevel(baseLevel)
+
+    return self.characterMenu, self.characterMenuDismiss
+end
+
 function BankWindow:AcquireViewMenuButton(menu)
     local index = #self.viewMenuButtons + 1
     local button = CreateFrame("Button", nil, menu)
@@ -323,6 +501,54 @@ function BankWindow:AcquireViewMenuButton(menu)
     end)
 
     self.viewMenuButtons[index] = button
+    return button
+end
+
+function BankWindow:AcquireCharacterMenuButton(menu)
+    local index = #self.characterMenuButtons + 1
+    local button = CreateFrame("Button", nil, menu)
+    button:SetNormalTexture("Interface\\Buttons\\WHITE8x8")
+    button:GetNormalTexture():SetVertexColor(0, 0, 0, 0)
+    button:SetHighlightTexture("Interface\\Buttons\\WHITE8x8", "ADD")
+    button:GetHighlightTexture():SetVertexColor(0.24, 0.46, 0.72, 0.18)
+
+    local selectedBackground = button:CreateTexture(nil, "BACKGROUND")
+    selectedBackground:SetAllPoints()
+    selectedBackground:SetColorTexture(0.22, 0.44, 0.7, 0.22)
+    selectedBackground:Hide()
+    button.selectedBackground = selectedBackground
+
+    local text = button:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    text:SetPoint("LEFT", button, "LEFT", 10, 0)
+    text:SetPoint("RIGHT", button, "RIGHT", -10, 0)
+    text:SetJustifyH("LEFT")
+    text:SetJustifyV("MIDDLE")
+    text:SetWordWrap(false)
+    vesperTools:ApplyConfiguredFont(text, 12, "")
+    button.text = text
+
+    local matchText = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    matchText:SetPoint("LEFT", button, "CENTER", 8, 0)
+    matchText:SetPoint("RIGHT", button, "RIGHT", -10, 0)
+    matchText:SetJustifyH("RIGHT")
+    matchText:SetJustifyV("MIDDLE")
+    matchText:SetWordWrap(false)
+    vesperTools:ApplyConfiguredFont(matchText, 11, "")
+    matchText:Hide()
+    button.matchText = matchText
+
+    text:ClearAllPoints()
+    text:SetPoint("LEFT", button, "LEFT", 10, 0)
+    text:SetPoint("RIGHT", matchText, "LEFT", -8, 0)
+
+    button:SetScript("OnClick", function(selfButton)
+        self:HideCharacterMenu()
+        if selfButton.characterKey then
+            self:SetSelectedCharacter(selfButton.characterKey)
+        end
+    end)
+
+    self.characterMenuButtons[index] = button
     return button
 end
 
@@ -360,6 +586,74 @@ function BankWindow:RefreshViewMenu()
     menu:SetSize(menuWidth, (VIEW_MENU_PADDING * 2) + (#self.displayViews * VIEW_MENU_ROW_HEIGHT))
 end
 
+function BankWindow:RefreshCharacterMenu()
+    local menu = self.characterMenu
+    if not menu then
+        return
+    end
+
+    local menuWidth = math.max(CHARACTER_DROPDOWN_WIDTH, self.characterDropdown and math.floor((self.characterDropdown:GetWidth() or CHARACTER_DROPDOWN_WIDTH) + 0.5) or CHARACTER_DROPDOWN_WIDTH)
+    local innerWidth = menuWidth - (CHARACTER_MENU_PADDING * 2)
+    local visibleCount = #self.displayCharacters
+
+    for i = 1, visibleCount do
+        local character = self.displayCharacters[i]
+        local button = self.characterMenuButtons[i] or self:AcquireCharacterMenuButton(menu)
+        button.characterKey = character.key
+        button:SetSize(innerWidth, CHARACTER_MENU_ROW_HEIGHT)
+        button:ClearAllPoints()
+        button:SetPoint("TOPLEFT", menu, "TOPLEFT", CHARACTER_MENU_PADDING, -CHARACTER_MENU_PADDING - ((i - 1) * CHARACTER_MENU_ROW_HEIGHT))
+        button.text:SetText(character.fullName)
+        local matchCount = self.characterSearchMatchCounts and tonumber(self.characterSearchMatchCounts[character.key]) or 0
+        if matchCount > 0 then
+            button.matchText:SetText(string.format(L["SEARCH_FOUND_FMT"], matchCount))
+            button.matchText:SetTextColor(0.42, 0.94, 0.52, 1)
+            button.matchText:Show()
+        else
+            button.matchText:SetText("")
+            button.matchText:Hide()
+        end
+        if character.key == self.selectedCharacterKey then
+            button.selectedBackground:Show()
+            button.text:SetTextColor(0.92, 0.97, 1, 1)
+        else
+            button.selectedBackground:Hide()
+            button.text:SetTextColor(0.82, 0.86, 0.92, 1)
+        end
+        button:Show()
+    end
+
+    for i = visibleCount + 1, #self.characterMenuButtons do
+        self.characterMenuButtons[i]:Hide()
+    end
+
+    menu:SetSize(menuWidth, (CHARACTER_MENU_PADDING * 2) + (visibleCount * CHARACTER_MENU_ROW_HEIGHT))
+end
+
+function BankWindow:UpdateSelectedCharacterDropdownMatch(characterKey)
+    if not self.characterDropdownText or not self.characterDropdownArrow then
+        return
+    end
+
+    local matchCount = self.characterSearchMatchCounts and characterKey and tonumber(self.characterSearchMatchCounts[characterKey]) or 0
+
+    self.characterDropdownText:ClearAllPoints()
+    self.characterDropdownText:SetPoint("LEFT", self.characterDropdown, "LEFT", 8, 0)
+
+    if self.characterDropdownMatchText and matchCount > 0 then
+        self.characterDropdownMatchText:SetText(string.format(L["SEARCH_FOUND_FMT"], matchCount))
+        self.characterDropdownMatchText:SetTextColor(0.42, 0.94, 0.52, 1)
+        self.characterDropdownMatchText:Show()
+        self.characterDropdownText:SetPoint("RIGHT", self.characterDropdownMatchText, "LEFT", -8, 0)
+    else
+        if self.characterDropdownMatchText then
+            self.characterDropdownMatchText:SetText("")
+            self.characterDropdownMatchText:Hide()
+        end
+        self.characterDropdownText:SetPoint("RIGHT", self.characterDropdownArrow, "LEFT", -6, 0)
+    end
+end
+
 function BankWindow:OpenViewMenu(button)
     if not button then
         return
@@ -372,6 +666,7 @@ function BankWindow:OpenViewMenu(button)
     end
 
     self:ResolveSelectedView()
+    self:HideCharacterMenu()
     self:RefreshViewMenu()
 
     dismiss:Show()
@@ -380,6 +675,28 @@ function BankWindow:OpenViewMenu(button)
     menu:Show()
     menu:Raise()
     self:UpdateViewDropdownVisual()
+end
+
+function BankWindow:OpenCharacterMenu(button)
+    if not button or #self.displayCharacters == 0 then
+        return
+    end
+
+    local menu, dismiss = self:GetCharacterMenuFrames()
+    if menu:IsShown() then
+        self:HideCharacterMenu()
+        return
+    end
+
+    self:HideViewMenu()
+    self:RefreshCharacterMenu()
+
+    dismiss:Show()
+    menu:ClearAllPoints()
+    menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -CHARACTER_MENU_GAP)
+    menu:Show()
+    menu:Raise()
+    self:UpdateCharacterDropdownVisual()
 end
 
 function BankWindow:SaveWindowState()
@@ -655,6 +972,55 @@ function BankWindow:ApplySearchDimState(button, record, searchTokens)
     button:SetAlpha(matchesSearch and 1 or 0.24)
 end
 
+function BankWindow:GetSnapshotSearchMatchCount(snapshot, searchTokens)
+    if not searchTokens or #searchTokens == 0 then
+        return 0
+    end
+
+    local bank = type(snapshot) == "table" and snapshot.bank or nil
+    local bags = type(bank) == "table" and bank.bags or nil
+    if type(bags) ~= "table" then
+        return 0
+    end
+
+    local matchCount = 0
+    for _, bag in pairs(bags) do
+        if type(bag) == "table" and type(bag.slots) == "table" then
+            for slotID = 1, tonumber(bag.size) or 0 do
+                local record = bag.slots[slotID]
+                if type(record) == "table" and self:RecordMatchesSearch(record, searchTokens) then
+                    matchCount = matchCount + 1
+                end
+            end
+        end
+    end
+
+    return matchCount
+end
+
+function BankWindow:BuildCharacterSearchMatchCounts(searchTokens)
+    if not searchTokens or #searchTokens == 0 then
+        return nil
+    end
+
+    local store = self:GetStore()
+    if not store or type(store.GetCharacterBankSnapshot) ~= "function" then
+        return nil
+    end
+
+    local matchCounts = {}
+    for i = 1, #self.displayCharacters do
+        local character = self.displayCharacters[i]
+        local snapshot = store:GetCharacterBankSnapshot(character.key)
+        local matchCount = self:GetSnapshotSearchMatchCount(snapshot, searchTokens)
+        if matchCount > 0 then
+            matchCounts[character.key] = matchCount
+        end
+    end
+
+    return matchCounts
+end
+
 function BankWindow:GetCombineRecordKey(record)
     if type(record) ~= "table" then
         return nil
@@ -842,6 +1208,7 @@ function BankWindow:CreateWindow()
 
     local closeButton = vesperTools:CreateModernCloseButton(titlebar, function()
         self:HideViewMenu()
+        self:HideCharacterMenu()
         self:HandleCloseRequest()
     end, {
         size = 20,
@@ -855,8 +1222,8 @@ function BankWindow:CreateWindow()
 
     local navFrame = CreateFrame("Frame", nil, frame)
     navFrame:SetHeight(28)
-    navFrame:SetPoint("TOPLEFT", titlebar, "BOTTOMLEFT", 10, -8)
-    navFrame:SetPoint("TOPRIGHT", titlebar, "BOTTOMRIGHT", -40, -8)
+    navFrame:SetPoint("TOPLEFT", titlebar, "BOTTOMLEFT", NAV_LEFT_INSET, -8)
+    navFrame:SetPoint("TOPRIGHT", titlebar, "BOTTOMRIGHT", -NAV_RIGHT_INSET, -8)
 
     local combineStacksButton = CreateFrame("Button", nil, navFrame, "BackdropTemplate")
     combineStacksButton:SetPoint("RIGHT", navFrame, "RIGHT", 0, 0)
@@ -967,6 +1334,50 @@ function BankWindow:CreateWindow()
     viewDropdownArrow:SetVertexColor(1, 1, 1, 0.98)
     self.viewDropdownArrow = viewDropdownArrow
 
+    local characterDropdown = CreateFrame("Button", nil, navFrame, "BackdropTemplate")
+    characterDropdown:SetPoint("LEFT", viewDropdown, "RIGHT", HEADER_ACTION_BUTTON_GAP, 0)
+    characterDropdown:SetSize(CHARACTER_DROPDOWN_WIDTH, VIEW_DROPDOWN_HEIGHT)
+    characterDropdown:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    characterDropdown:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
+    characterDropdown:SetBackdropBorderColor(1, 1, 1, 0.12)
+    characterDropdown:SetHighlightTexture("Interface\\Buttons\\WHITE8x8", "ADD")
+    characterDropdown:GetHighlightTexture():SetVertexColor(0.24, 0.46, 0.72, 0.2)
+    characterDropdown:SetPushedTexture("Interface\\Buttons\\WHITE8x8")
+    characterDropdown:GetPushedTexture():SetVertexColor(0.12, 0.2, 0.3, 0.36)
+    characterDropdown:SetScript("OnClick", function(selfButton)
+        self:OpenCharacterMenu(selfButton)
+    end)
+    self.characterDropdown = characterDropdown
+
+    local characterDropdownText = characterDropdown:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    characterDropdownText:SetPoint("LEFT", characterDropdown, "LEFT", 8, 0)
+    characterDropdownText:SetPoint("RIGHT", characterDropdown, "RIGHT", -24, 0)
+    characterDropdownText:SetJustifyH("LEFT")
+    characterDropdownText:SetJustifyV("MIDDLE")
+    characterDropdownText:SetWordWrap(false)
+    vesperTools:ApplyConfiguredFont(characterDropdownText, 12, "")
+    self.characterDropdownText = characterDropdownText
+
+    local characterDropdownArrow = characterDropdown:CreateTexture(nil, "ARTWORK")
+    characterDropdownArrow:SetPoint("RIGHT", characterDropdown, "RIGHT", -8, 0)
+    characterDropdownArrow:SetSize(10, 10)
+    characterDropdownArrow:SetTexture(VIEW_DROPDOWN_ARROW_TEXTURE)
+    characterDropdownArrow:SetVertexColor(1, 1, 1, 0.98)
+    self.characterDropdownArrow = characterDropdownArrow
+
+    local characterDropdownMatchText = characterDropdown:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    characterDropdownMatchText:SetPoint("RIGHT", characterDropdownArrow, "LEFT", -4, 0)
+    characterDropdownMatchText:SetJustifyH("RIGHT")
+    characterDropdownMatchText:SetJustifyV("MIDDLE")
+    characterDropdownMatchText:SetWordWrap(false)
+    vesperTools:ApplyConfiguredFont(characterDropdownMatchText, 11, "")
+    characterDropdownMatchText:Hide()
+    self.characterDropdownMatchText = characterDropdownMatchText
+
     local content = CreateFrame("Frame", nil, frame)
     content:SetPoint("TOPLEFT", navFrame, "BOTTOMLEFT", 0, -10)
     content:SetSize(1, 1)
@@ -984,6 +1395,7 @@ function BankWindow:CreateWindow()
     self.frame = frame
     frame:SetScript("OnHide", function()
         self:HideViewMenu()
+        self:HideCharacterMenu()
         self:ClearSearch()
     end)
     self:UpdateSearchPlaceholder()
@@ -996,7 +1408,7 @@ function BankWindow:BuildLayoutGroups(store, context, viewSettings)
     for i = 1, #context.categories do
         local category = context.categories[i]
         local items
-        if context.key == "warband" then
+        if context.viewKey == "warband" then
             items = store:GetWarbandCategoryItems(category.key)
         else
             items = store:GetCharacterBankCategoryItems(context.characterKey, category.key)
@@ -1004,7 +1416,7 @@ function BankWindow:BuildLayoutGroups(store, context, viewSettings)
 
         if #items > 0 then
             local displayItems = self:BuildDisplayItems(items, viewSettings)
-            local hidden = self:IsCategoryCollapsed(context.key, category.key)
+            local hidden = self:IsCategoryCollapsed(context.collapseKey, category.key)
             if not hidden and #displayItems > maxItemCount then
                 maxItemCount = #displayItems
             end
@@ -1046,10 +1458,26 @@ function BankWindow:MeasureContentHeight(groups, columns, viewSettings, hasSumma
     return height + 12
 end
 
-function BankWindow:ResolveAutoLayout(groups, maxItemCount, viewSettings)
+function BankWindow:GetHeaderMinimumFrameWidth(viewKey)
+    local leftWidth = VIEW_DROPDOWN_WIDTH
+    if viewKey == "character" then
+        leftWidth = leftWidth + HEADER_ACTION_BUTTON_GAP + CHARACTER_DROPDOWN_WIDTH
+    end
+
+    local rightWidth = COMBINE_BUTTON_WIDTH
+    if viewKey == "warband" then
+        rightWidth = rightWidth + HEADER_ACTION_BUTTON_GAP + DEPOSIT_BUTTON_WIDTH
+    end
+
+    local requiredWidth = NAV_LEFT_INSET + leftWidth + rightWidth + NAV_RIGHT_INSET + HEADER_ACTION_BUTTON_GAP
+    return math.max(MIN_WINDOW_WIDTH, requiredWidth)
+end
+
+function BankWindow:ResolveAutoLayout(groups, maxItemCount, viewSettings, viewKey)
     local screenWidth = UIParent:GetWidth() or 1920
-    local maxFrameWidth = math.max(MIN_WINDOW_WIDTH, math.floor(screenWidth - WINDOW_SCREEN_MARGIN))
-    local maxContentWidth = math.max(MIN_WINDOW_WIDTH - 32, maxFrameWidth - 32)
+    local minFrameWidth = self:GetHeaderMinimumFrameWidth(viewKey)
+    local maxFrameWidth = math.max(minFrameWidth, math.floor(screenWidth - WINDOW_SCREEN_MARGIN))
+    local maxContentWidth = math.max(minFrameWidth - 32, maxFrameWidth - 32)
     local itemIconSize = viewSettings and viewSettings.itemIconSize or DEFAULT_BUTTON_SIZE
     local buttonGap = viewSettings and viewSettings.buttonGap or BUTTON_GAP
     local configuredColumns = viewSettings and viewSettings.columns or 10
@@ -1061,10 +1489,11 @@ function BankWindow:ResolveAutoLayout(groups, maxItemCount, viewSettings)
     local summaryWidth = (CONTENT_SIDE_PADDING * 2) + itemIconSize
     local contentWidth = math.max(gridWidth, summaryWidth)
     local contentHeight = self:MeasureContentHeight(groups, columns, viewSettings, true)
-    local desiredWidth = math.max(MIN_WINDOW_WIDTH, contentWidth + 20)
+    local desiredWidth = math.max(minFrameWidth, contentWidth + 20)
     local desiredHeight = WINDOW_CHROME_HEIGHT + contentHeight
-    local frameWidth = clamp(desiredWidth, MIN_WINDOW_WIDTH, maxFrameWidth)
+    local frameWidth = clamp(desiredWidth, minFrameWidth, maxFrameWidth)
     local frameHeight = math.max(MIN_WINDOW_HEIGHT, desiredHeight)
+    contentWidth = math.max(contentWidth, frameWidth - 32)
 
     return {
         columns = columns,
@@ -1376,7 +1805,7 @@ function BankWindow:ConfigureSummaryButton(button, summaryEntry, viewSettings)
     button:Show()
 end
 
-function BankWindow:ResolveViewContext(viewKey)
+function BankWindow:ResolveViewContext(viewKey, selectedCharacter)
     local store = self:GetStore()
     if not store then
         return nil
@@ -1384,28 +1813,42 @@ function BankWindow:ResolveViewContext(viewKey)
 
     if viewKey == "warband" then
         local snapshot = store:GetWarbandBankSnapshot()
+        local hasSnapshot = type(snapshot) == "table" and (tonumber(snapshot.lastSeen) or 0) > 0
+        local isLive = store:IsWarbandBankLive()
+        if not isLive and not hasSnapshot then
+            snapshot = nil
+        end
         return {
-            key = "warband",
+            viewKey = "warband",
+            collapseKey = "warband",
             label = L["BANK_SWITCH_WARBAND"],
             ownerName = L["BANK_SWITCH_WARBAND"],
             snapshot = snapshot,
-            categories = store:GetWarbandCategoryList(),
-            emptySummary = store:GetWarbandEmptySlotSummary(),
-            isLive = store:IsWarbandBankLive(),
+            categories = snapshot and store:GetWarbandCategoryList() or {},
+            emptySummary = snapshot and store:GetWarbandEmptySlotSummary() or {},
+            isLive = isLive,
         }
     end
 
-    local characterKey = store.GetCurrentCharacterKey and store.GetCurrentCharacterKey(store) or nil
+    local characterKey = selectedCharacter and selectedCharacter.key or nil
     local record = characterKey and store:GetCharacterBankSnapshot(characterKey) or nil
+    local snapshot = record and record.bank or nil
+    local isLive = selectedCharacter and selectedCharacter.isLive and true or false
+    local hasSnapshot = type(snapshot) == "table" and (tonumber(snapshot.lastSeen) or 0) > 0
+    if not isLive and not hasSnapshot then
+        snapshot = nil
+    end
+
     return {
-        key = "character",
+        viewKey = "character",
+        collapseKey = characterKey or "character",
         label = L["BANK_SWITCH_CHARACTER"],
-        ownerName = record and record.fullName or vesperTools:GetCurrentCharacterFullName(),
-        snapshot = record and record.bank or nil,
+        ownerName = selectedCharacter and selectedCharacter.fullName or (record and record.fullName) or vesperTools:GetCurrentCharacterFullName(),
+        snapshot = snapshot,
         characterKey = characterKey,
-        categories = characterKey and store:GetCharacterBankCategoryList(characterKey) or {},
-        emptySummary = characterKey and store:GetCharacterBankEmptySlotSummary(characterKey) or {},
-        isLive = store:IsCharacterBankLive(),
+        categories = snapshot and characterKey and store:GetCharacterBankCategoryList(characterKey) or {},
+        emptySummary = snapshot and characterKey and store:GetCharacterBankEmptySlotSummary(characterKey) or {},
+        isLive = isLive,
     }
 end
 
@@ -1415,10 +1858,11 @@ function BankWindow:RefreshWindow()
     end
 
     local viewSettings = self:GetViewSettings()
-    self:UpdateDepositButtonState()
-    self:UpdateCombineStacksButtonVisual(viewSettings.combineStacks)
-
     local selectedView = self:ResolveSelectedView()
+    local selectedCharacter = selectedView and selectedView.key == "character" and self:ResolveSelectedCharacter() or nil
+    self.characterSearchMatchCounts = selectedView and selectedView.key == "character" and self:BuildCharacterSearchMatchCounts(self:GetSearchTokens()) or nil
+
+    self:UpdateCombineStacksButtonVisual(viewSettings.combineStacks)
     self:HideAllReusableFrames()
 
     if self.viewDropdown then
@@ -1427,17 +1871,47 @@ function BankWindow:RefreshWindow()
         end
         self:SetViewDropdownEnabled(selectedView ~= nil)
     end
-    self:UpdateViewDropdownVisual()
+    if self.characterDropdown then
+        if selectedView and selectedView.key == "character" then
+            self.characterDropdown:Show()
+            if self.characterDropdownText then
+                self.characterDropdownText:SetText(selectedCharacter and selectedCharacter.fullName or vesperTools:GetCurrentCharacterFullName())
+            end
+            self:UpdateSelectedCharacterDropdownMatch(selectedCharacter and selectedCharacter.key or nil)
+            self:SetCharacterDropdownEnabled(selectedCharacter ~= nil and #self.displayCharacters > 1)
+        else
+            self:UpdateSelectedCharacterDropdownMatch(nil)
+            self:HideCharacterMenu()
+            self.characterDropdown:Hide()
+        end
+    end
 
-    local context = selectedView and self:ResolveViewContext(selectedView.key) or nil
-    self.modeText:SetText(context and (context.isLive and L["BAGS_LIVE"] or L["BAGS_READ_ONLY"]) or "")
+    if self.depositButton then
+        if selectedView and selectedView.key == "warband" then
+            self.depositButton:Show()
+            self:UpdateDepositButtonState()
+        else
+            GameTooltip:Hide()
+            self.depositButton:Hide()
+        end
+    end
+
+    self:UpdateViewDropdownVisual()
+    self:UpdateCharacterDropdownVisual()
+    if self.characterMenu and self.characterMenu:IsShown() then
+        self:RefreshCharacterMenu()
+    end
+
+    local context = selectedView and self:ResolveViewContext(selectedView.key, selectedCharacter) or nil
+    self.modeText:SetText(context and context.snapshot and (context.isLive and L["BAGS_LIVE"] or L["BAGS_READ_ONLY"]) or "")
 
     if not context or not context.snapshot then
+        local minFrameWidth = self:GetHeaderMinimumFrameWidth(selectedView and selectedView.key or nil)
         self.emptyText:SetText(L["BANK_EMPTY"])
         self.emptyText:Show()
-        self.frame:SetSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
-        self.emptyText:SetWidth(MIN_WINDOW_WIDTH - 60)
-        self.content:SetSize(MIN_WINDOW_WIDTH - 32, 40)
+        self.frame:SetSize(minFrameWidth, MIN_WINDOW_HEIGHT)
+        self.emptyText:SetWidth(minFrameWidth - 60)
+        self.content:SetSize(minFrameWidth - 32, 40)
         self:SaveWindowState()
         return
     end
@@ -1447,7 +1921,7 @@ function BankWindow:RefreshWindow()
     local itemIndex = 0
     local summaryIndex = 0
     local groups, maxItemCount = self:BuildLayoutGroups(store, context, viewSettings)
-    local layout = self:ResolveAutoLayout(groups, maxItemCount, viewSettings)
+    local layout = self:ResolveAutoLayout(groups, maxItemCount, viewSettings, selectedView and selectedView.key or nil)
     local contentWidth = layout.contentWidth
     local columns = layout.columns
     local slotPitch = viewSettings.itemIconSize + viewSettings.buttonGap
@@ -1489,7 +1963,7 @@ function BankWindow:RefreshWindow()
                 section.toggleButton.icon:SetVertexColor(1, 1, 1, 0.98)
             end
             section.toggleButton:SetScript("OnClick", function()
-                self:ToggleCategoryCollapsed(context.key, category.key)
+                self:ToggleCategoryCollapsed(context.collapseKey, category.key)
             end)
             section:Show()
 

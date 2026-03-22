@@ -935,6 +935,7 @@ function vesperTools:OnInitialize()
                 combineStacks = false,
             },
             lastViewedCharacterGUID = nil,
+            lastViewedBankCharacterGUID = nil,
             lastViewedBankView = "warband",
             replaceBackpack = false,
             replaceCharacterBank = false,
@@ -1032,6 +1033,9 @@ function vesperTools:GetBagsProfile()
 
     if type(profile.lastViewedCharacterGUID) ~= "string" or profile.lastViewedCharacterGUID == "" then
         profile.lastViewedCharacterGUID = nil
+    end
+    if type(profile.lastViewedBankCharacterGUID) ~= "string" or profile.lastViewedBankCharacterGUID == "" then
+        profile.lastViewedBankCharacterGUID = nil
     end
     if profile.lastViewedBankView ~= "character" and profile.lastViewedBankView ~= "warband" then
         profile.lastViewedBankView = "warband"

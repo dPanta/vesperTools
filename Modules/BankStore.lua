@@ -918,6 +918,59 @@ function BankStore:GetCurrentCharacterRecord()
     return currentKey and self:GetCharacterBankSnapshot(currentKey) or nil
 end
 
+function BankStore:GetDisplayCharacters()
+    local root = self:GetBankRoot()
+    if not root then
+        return {}
+    end
+
+    local currentKey = self:GetCurrentCharacterKey()
+    local currentIsLive = self:IsCharacterBankLive()
+    local characters = {}
+    local currentPlaceholder = nil
+
+    for characterKey, data in pairs(root.charactersByGUID) do
+        if type(data) == "table" then
+            local bank = type(data.bank) == "table" and data.bank or nil
+            local bankLastSeen = tonumber(bank and bank.lastSeen) or 0
+            local isCurrent = characterKey == currentKey
+            local entry = {
+                key = characterKey,
+                fullName = data.fullName or characterKey,
+                classID = data.classID,
+                faction = data.faction,
+                lastSeen = math.max(bankLastSeen, tonumber(data.lastSeen) or 0),
+                bankLastSeen = bankLastSeen,
+                hasSnapshot = bankLastSeen > 0,
+                isCurrent = isCurrent,
+                isLive = isCurrent and currentIsLive or false,
+            }
+
+            if entry.hasSnapshot or entry.isLive then
+                characters[#characters + 1] = entry
+            elseif isCurrent then
+                currentPlaceholder = entry
+            end
+        end
+    end
+
+    if #characters == 0 and currentPlaceholder then
+        characters[#characters + 1] = currentPlaceholder
+    end
+
+    table.sort(characters, function(a, b)
+        if a.isCurrent ~= b.isCurrent then
+            return a.isCurrent
+        end
+        if a.hasSnapshot ~= b.hasSnapshot then
+            return a.hasSnapshot
+        end
+        return a.fullName < b.fullName
+    end)
+
+    return characters
+end
+
 function BankStore:GetCategoryListFromView(view)
     if not view or type(view.categoryTotals) ~= "table" then
         return {}

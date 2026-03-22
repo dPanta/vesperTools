@@ -7,7 +7,7 @@ local MIN_WINDOW_WIDTH = 480
 local MIN_WINDOW_HEIGHT = 220
 local DEFAULT_BUTTON_SIZE = 38
 local BUTTON_GAP = 6
-local SECTION_GAP = 18
+local SECTION_GAP = 10
 local HEADER_HEIGHT = 28
 local SUMMARY_GAP = 14
 local CONTENT_SIDE_PADDING = 8
@@ -105,6 +105,7 @@ function BagsWindow:OnInitialize()
     self.searchQuery = nil
     self.characterDropdown = nil
     self.characterDropdownText = nil
+    self.characterDropdownMatchText = nil
     self.characterDropdownArrow = nil
     self.characterMenu = nil
     self.characterMenuDismiss = nil
@@ -126,6 +127,7 @@ function BagsWindow:OnInitialize()
     self.summaryButtons = {}
     self.selectedCharacterKey = nil
     self.displayCharacters = {}
+    self.characterSearchMatchCounts = nil
     self.currentDisplayCharacter = nil
     self.currentSnapshot = nil
     self.newItemGlowKeysSeen = {}
@@ -400,6 +402,20 @@ function BagsWindow:AcquireCharacterMenuButton(menu)
     vesperTools:ApplyConfiguredFont(text, 12, "")
     button.text = text
 
+    local matchText = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    matchText:SetPoint("LEFT", button, "CENTER", 8, 0)
+    matchText:SetPoint("RIGHT", button, "RIGHT", -10, 0)
+    matchText:SetJustifyH("RIGHT")
+    matchText:SetJustifyV("MIDDLE")
+    matchText:SetWordWrap(false)
+    vesperTools:ApplyConfiguredFont(matchText, 11, "")
+    matchText:Hide()
+    button.matchText = matchText
+
+    text:ClearAllPoints()
+    text:SetPoint("LEFT", button, "LEFT", 10, 0)
+    text:SetPoint("RIGHT", matchText, "LEFT", -8, 0)
+
     button:SetScript("OnClick", function(selfButton)
         self:HideCharacterMenu()
         if selfButton.characterKey then
@@ -429,6 +445,15 @@ function BagsWindow:RefreshCharacterMenu()
         button:ClearAllPoints()
         button:SetPoint("TOPLEFT", menu, "TOPLEFT", CHARACTER_MENU_PADDING, -CHARACTER_MENU_PADDING - ((i - 1) * CHARACTER_MENU_ROW_HEIGHT))
         button.text:SetText(character.fullName)
+        local matchCount = self.characterSearchMatchCounts and tonumber(self.characterSearchMatchCounts[character.key]) or 0
+        if matchCount > 0 then
+            button.matchText:SetText(string.format(L["SEARCH_FOUND_FMT"], matchCount))
+            button.matchText:SetTextColor(0.42, 0.94, 0.52, 1)
+            button.matchText:Show()
+        else
+            button.matchText:SetText("")
+            button.matchText:Hide()
+        end
         if character.key == self.selectedCharacterKey then
             button.selectedBackground:Show()
             button.text:SetTextColor(0.92, 0.97, 1, 1)
@@ -444,6 +469,30 @@ function BagsWindow:RefreshCharacterMenu()
     end
 
     menu:SetSize(menuWidth, (CHARACTER_MENU_PADDING * 2) + (visibleCount * CHARACTER_MENU_ROW_HEIGHT))
+end
+
+function BagsWindow:UpdateSelectedCharacterDropdownMatch(characterKey)
+    if not self.characterDropdownText or not self.characterDropdownArrow then
+        return
+    end
+
+    local matchCount = self.characterSearchMatchCounts and characterKey and tonumber(self.characterSearchMatchCounts[characterKey]) or 0
+
+    self.characterDropdownText:ClearAllPoints()
+    self.characterDropdownText:SetPoint("LEFT", self.characterDropdown, "LEFT", 8, 0)
+
+    if self.characterDropdownMatchText and matchCount > 0 then
+        self.characterDropdownMatchText:SetText(string.format(L["SEARCH_FOUND_FMT"], matchCount))
+        self.characterDropdownMatchText:SetTextColor(0.42, 0.94, 0.52, 1)
+        self.characterDropdownMatchText:Show()
+        self.characterDropdownText:SetPoint("RIGHT", self.characterDropdownMatchText, "LEFT", -8, 0)
+    else
+        if self.characterDropdownMatchText then
+            self.characterDropdownMatchText:SetText("")
+            self.characterDropdownMatchText:Hide()
+        end
+        self.characterDropdownText:SetPoint("RIGHT", self.characterDropdownArrow, "LEFT", -6, 0)
+    end
 end
 
 function BagsWindow:OpenCharacterMenu(button)
@@ -913,6 +962,55 @@ function BagsWindow:ApplySearchDimState(button, record, searchTokens)
     button:SetAlpha(matchesSearch and 1 or 0.24)
 end
 
+function BagsWindow:GetSnapshotSearchMatchCount(snapshot, searchTokens)
+    if not searchTokens or #searchTokens == 0 then
+        return 0
+    end
+
+    local carried = type(snapshot) == "table" and snapshot.carried or nil
+    local bags = type(carried) == "table" and carried.bags or nil
+    if type(bags) ~= "table" then
+        return 0
+    end
+
+    local matchCount = 0
+    for _, bag in pairs(bags) do
+        if type(bag) == "table" and type(bag.slots) == "table" then
+            for slotID = 1, tonumber(bag.size) or 0 do
+                local record = bag.slots[slotID]
+                if type(record) == "table" and self:RecordMatchesSearch(record, searchTokens) then
+                    matchCount = matchCount + 1
+                end
+            end
+        end
+    end
+
+    return matchCount
+end
+
+function BagsWindow:BuildCharacterSearchMatchCounts(searchTokens)
+    if not searchTokens or #searchTokens == 0 then
+        return nil
+    end
+
+    local store = self:GetStore()
+    if not store or type(store.GetCharacterBagSnapshot) ~= "function" then
+        return nil
+    end
+
+    local matchCounts = {}
+    for i = 1, #self.displayCharacters do
+        local character = self.displayCharacters[i]
+        local snapshot = store:GetCharacterBagSnapshot(character.key)
+        local matchCount = self:GetSnapshotSearchMatchCount(snapshot, searchTokens)
+        if matchCount > 0 then
+            matchCounts[character.key] = matchCount
+        end
+    end
+
+    return matchCounts
+end
+
 function BagsWindow:BuildDisplayItems(items, viewSettings)
     if not viewSettings or not viewSettings.combineStacks then
         return items
@@ -1240,6 +1338,15 @@ function BagsWindow:CreateWindow()
     characterDropdownArrow:SetTexture(CHARACTER_DROPDOWN_ARROW_TEXTURE)
     characterDropdownArrow:SetVertexColor(1, 1, 1, 0.98)
     self.characterDropdownArrow = characterDropdownArrow
+
+    local characterDropdownMatchText = characterDropdown:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    characterDropdownMatchText:SetPoint("RIGHT", characterDropdownArrow, "LEFT", -4, 0)
+    characterDropdownMatchText:SetJustifyH("RIGHT")
+    characterDropdownMatchText:SetJustifyV("MIDDLE")
+    characterDropdownMatchText:SetWordWrap(false)
+    vesperTools:ApplyConfiguredFont(characterDropdownMatchText, 11, "")
+    characterDropdownMatchText:Hide()
+    self.characterDropdownMatchText = characterDropdownMatchText
 
     local content = CreateFrame("Frame", nil, frame)
     content:SetPoint("TOPLEFT", navFrame, "BOTTOMLEFT", 0, -10)
@@ -1906,6 +2013,7 @@ function BagsWindow:RefreshWindow()
 
     local store = self:GetStore()
     if not store then
+        self.characterSearchMatchCounts = nil
         return
     end
 
@@ -1913,6 +2021,7 @@ function BagsWindow:RefreshWindow()
     self:HideAllReusableFrames()
 
     if not selectedCharacter then
+        self.characterSearchMatchCounts = nil
         self.currentDisplayCharacter = nil
         self.currentSnapshot = nil
         self:HideCharacterMenu()
@@ -1921,6 +2030,7 @@ function BagsWindow:RefreshWindow()
             if self.characterDropdownText then
                 self.characterDropdownText:SetText(L["BAGS_EMPTY"])
             end
+            self:UpdateSelectedCharacterDropdownMatch(nil)
             self:SetCharacterDropdownEnabled(false)
         end
         self:UpdateCleanupButtonVisual(false)
@@ -1934,13 +2044,19 @@ function BagsWindow:RefreshWindow()
         return
     end
 
+    self.characterSearchMatchCounts = self:BuildCharacterSearchMatchCounts(self:GetSearchTokens())
+
     if self.characterDropdown then
         if self.characterDropdownText then
             self.characterDropdownText:SetText(selectedCharacter.fullName)
         end
+        self:UpdateSelectedCharacterDropdownMatch(selectedCharacter.key)
         self:SetCharacterDropdownEnabled(true)
     end
     self:UpdateCharacterDropdownVisual()
+    if self.characterMenu and self.characterMenu:IsShown() then
+        self:RefreshCharacterMenu()
+    end
     self:UpdateCleanupButtonVisual(selectedCharacter.isCurrent)
     self.modeText:SetText(selectedCharacter.isCurrent and L["BAGS_LIVE"] or L["BAGS_READ_ONLY"])
 

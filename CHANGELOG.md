@@ -1,3 +1,13 @@
+## 2.3.0 - 2026-03-22
+
+### Changed
+- Expanded carried-bag search so typing in the bags window now checks other characters' saved bag snapshots, matching the existing bank-style account-wide search behaviour.
+- Added green `Found(x)` indicators in the bag and bank character switcher menus to show how many snapshot items matched on each character.
+- Added the same `Found(x)` indicator to the currently selected character on the closed character dropdown so search feedback stays visible without opening the menu.
+
+### Notes
+- This release focuses on account-wide inventory search visibility and faster cross-character item discovery.
+
 ## 2.2.0 - 2026-03-22
 
 ### Changed

@@ -200,6 +200,7 @@ local defaults = {
     ROSTER_TITLE_FALLBACK = "Guild Roster",
     SLASH_COMMAND_HELP = "Open vesperTools window",
     SLASH_USAGE = "Usage: /vg [bags|config|reset|sync|debug|keys|bestkeys]",
+    SEARCH_FOUND_FMT = "Found(%d)",
     STATUS_AFK = "AFK",
     STATUS_DND = "DND",
     STATUS_ONLINE = "Online",
