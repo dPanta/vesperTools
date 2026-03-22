@@ -1,8 +1,12 @@
-## 2.0.1 - 2026-03-22
+## 2.1.0 - 2026-03-22
 
-Hotfix version bump only.
+### Changed
+- Expanded and synchronised the shipped locale files across `enGB`, `deDE`, `esES`, `esMX`, `frFR`, `itIT`, `koKR`, `ptBR`, `ruRU`, `zhCN`, and `zhTW`.
+- Translated the main user-facing UI, configuration, tooltip, and roster strings for every shipped non-`enUS` locale.
+- Standardised the locale file structure so each locale now carries explicit translated overrides while still falling back cleanly to `enUS` for anything not yet overridden.
 
-No addon changes in this release.
+### Notes
+- This release is focused on localisation coverage and locale maintenance. Addon functionality is unchanged.
 
 ## 1.0.0 - 2026-03-22
 
