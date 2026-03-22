@@ -1,3 +1,13 @@
+## 2.4.2 - 2026-03-23
+
+### Changed
+- Reworked live item interaction in the Bags and Bank windows to use Blizzard's native container item button behavior instead of a custom protected use path.
+- Fixed `ADDON_ACTION_FORBIDDEN` errors caused by `vesperTools` trying to call `UseContainerItem()` directly from custom item click handlers.
+- Restored Blizzard-style live item interactions such as normal use, pickup/drag handling, modified clicks, and vendor sell cursor behavior for live bag and bank slots.
+
+### Notes
+- This hotfix focuses on making custom inventory item interaction behave like the default Retail container UI again.
+
 ## 2.4.1 - 2026-03-22
 
 ### Changed

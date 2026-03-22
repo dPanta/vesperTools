@@ -149,6 +149,7 @@ function BagsWindow:OnInitialize()
     self.currentDisplayCharacter = nil
     self.currentSnapshot = nil
     self.newItemGlowKeysSeen = {}
+    self.pendingSecureItemRefresh = false
 end
 
 function BagsWindow:OnEnable()
@@ -157,6 +158,7 @@ function BagsWindow:OnEnable()
     self:RegisterMessage("VESPERTOOLS_BAGS_INDEX_UPDATED", "OnBagDataChanged")
     self:RegisterMessage("VESPERTOOLS_CONFIG_CHANGED", "OnConfigChanged")
     self:RegisterMessage("VESPERTOOLS_GUILD_LOOKUP_UPDATED", "OnGuildLookupUpdated")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
 end
 
 function BagsWindow:GetStore()
@@ -181,6 +183,13 @@ end
 
 function BagsWindow:OnGuildLookupUpdated()
     self:RefreshGuildLookupPresentation()
+end
+
+function BagsWindow:PLAYER_REGEN_ENABLED()
+    if self.pendingSecureItemRefresh and self.frame and self.frame:IsShown() then
+        self.pendingSecureItemRefresh = false
+        self:RefreshWindow()
+    end
 end
 
 function BagsWindow:CleanupLegacyScrollArtifacts()
@@ -2003,6 +2012,22 @@ function BagsWindow:AcquireItemButton()
     itemLevel:Hide()
     button.itemLevel = itemLevel
 
+    button:SetScript("OnEnter", function(selfButton)
+        self:HandleItemEnter(selfButton)
+    end)
+    button:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    button:SetScript("OnClick", function(selfButton, mouseButton)
+        self:HandleItemClick(selfButton, mouseButton)
+    end)
+    button:SetScript("OnDragStart", function(selfButton)
+        self:HandleItemDrag(selfButton)
+    end)
+    button:SetScript("OnReceiveDrag", function(selfButton)
+        self:HandleItemDrag(selfButton)
+    end)
+
     self.itemButtons[#self.itemButtons + 1] = button
     return button
 end
@@ -2233,6 +2258,75 @@ function BagsWindow:ConfigureTooltip(button)
     GameTooltip:Show()
 end
 
+function BagsWindow:HandleItemEnter(button)
+    self:ConfigureTooltip(button)
+end
+
+function BagsWindow:HandleItemDrag(button)
+    if not button.isCombined and button.isCurrentCharacter and not InCombatLockdown() and C_Container and C_Container.PickupContainerItem then
+        C_Container.PickupContainerItem(button.bagID, button.slotID)
+    end
+end
+
+function BagsWindow:AcquireNativeContainerOverlay(button)
+    if not button or button.nativeContainerOverlay or not ContainerFrameItemButtonMixin then
+        return button and button.nativeContainerOverlay or nil
+    end
+
+    button.IsCombinedBagContainer = button.IsCombinedBagContainer or function()
+        return false
+    end
+
+    local overlay = CreateFrame("ItemButton", nil, button, "ContainerFrameItemButtonTemplate")
+    overlay:SetAllPoints(button)
+    overlay:SetFrameLevel(button:GetFrameLevel() + 10)
+    overlay:SetAlpha(0.01)
+    overlay:Hide()
+    button.nativeContainerOverlay = overlay
+    return overlay
+end
+
+function BagsWindow:UpdateNativeContainerOverlay(button)
+    local shouldUseNativeOverlay = not button.isCombined
+        and button.isCurrentCharacter
+        and button.bagID
+        and button.slotID
+        and ContainerFrameItemButtonMixin
+    local overlay = button.nativeContainerOverlay or (shouldUseNativeOverlay and self:AcquireNativeContainerOverlay(button)) or nil
+    if not overlay then
+        return
+    end
+
+    if shouldUseNativeOverlay then
+        local currentBagID = overlay.GetBagID and overlay:GetBagID() or nil
+        local needsRefresh = not overlay:IsShown()
+            or overlay:GetID() ~= button.slotID
+            or currentBagID ~= button.bagID
+
+        if needsRefresh then
+            if InCombatLockdown() then
+                self.pendingSecureItemRefresh = true
+                return
+            end
+            overlay:Initialize(button.bagID, button.slotID)
+        end
+
+        overlay:SetAllPoints(button)
+        overlay:SetFrameLevel(button:GetFrameLevel() + 10)
+        overlay:SetAlpha(0.01)
+        overlay:Show()
+        return
+    end
+
+    if overlay:IsShown() then
+        if InCombatLockdown() then
+            self.pendingSecureItemRefresh = true
+            return
+        end
+        overlay:Hide()
+    end
+end
+
 function BagsWindow:ConfigureSummaryTooltip(button)
     GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
     GameTooltip:SetText(button.summaryLabel or UNKNOWN, 1, 1, 1)
@@ -2241,7 +2335,11 @@ function BagsWindow:ConfigureSummaryTooltip(button)
 end
 
 function BagsWindow:HandleItemClick(button, mouseButton)
-    if type(button.hyperlink) == "string" and button.hyperlink ~= "" and HandleModifiedItemClick and HandleModifiedItemClick(button.hyperlink) then
+    if mouseButton == "LeftButton"
+        and type(button.hyperlink) == "string"
+        and button.hyperlink ~= ""
+        and HandleModifiedItemClick
+        and HandleModifiedItemClick(button.hyperlink) then
         return
     end
 
@@ -2250,10 +2348,10 @@ function BagsWindow:HandleItemClick(button, mouseButton)
     end
 
     if mouseButton == "RightButton" then
-        if C_Container and C_Container.UseContainerItem then
-            C_Container.UseContainerItem(button.bagID, button.slotID)
-        end
-    elseif C_Container and C_Container.PickupContainerItem then
+        return
+    end
+
+    if C_Container and C_Container.PickupContainerItem then
         C_Container.PickupContainerItem(button.bagID, button.slotID)
     end
 end
@@ -2375,6 +2473,7 @@ function BagsWindow:ConfigureItemButton(button, record, isCurrentCharacter, owne
     end
     button:SetBackdropColor(0.08, 0.08, 0.08, 1)
     button:SetEnabled(true)
+    self:UpdateNativeContainerOverlay(button)
 
     if viewSettings and viewSettings.showItemLevel then
         local itemLevel = self:GetItemLevelForRecord(record)
@@ -2404,25 +2503,6 @@ function BagsWindow:ConfigureItemButton(button, record, isCurrentCharacter, owne
         end
     end
 
-    button:SetScript("OnEnter", function(selfButton)
-        self:ConfigureTooltip(selfButton)
-    end)
-    button:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-    button:SetScript("OnClick", function(selfButton, mouseButton)
-        self:HandleItemClick(selfButton, mouseButton)
-    end)
-    button:SetScript("OnDragStart", function(selfButton)
-        if not selfButton.isCombined and selfButton.isCurrentCharacter and not InCombatLockdown() and C_Container and C_Container.PickupContainerItem then
-            C_Container.PickupContainerItem(selfButton.bagID, selfButton.slotID)
-        end
-    end)
-    button:SetScript("OnReceiveDrag", function(selfButton)
-        if not selfButton.isCombined and selfButton.isCurrentCharacter and not InCombatLockdown() and C_Container and C_Container.PickupContainerItem then
-            C_Container.PickupContainerItem(selfButton.bagID, selfButton.slotID)
-        end
-    end)
     self:ApplySearchDimState(button, record, self:GetSearchTokens())
     button:Show()
 end
