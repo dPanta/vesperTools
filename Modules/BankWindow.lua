@@ -1,6 +1,6 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local BankWindow = VesperGuild:NewModule("BankWindow", "AceEvent-3.0")
-local L = VesperGuild.L
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local BankWindow = vesperTools:NewModule("BankWindow", "AceEvent-3.0")
+local L = vesperTools.L
 local ITEM_CLASS = Enum and Enum.ItemClass or {}
 
 local MIN_WINDOW_WIDTH = 480
@@ -25,7 +25,7 @@ local COMBINE_BUTTON_WIDTH = 76
 local TITLEBAR_SEARCH_WIDTH = 220
 local TITLEBAR_SEARCH_HEIGHT = 22
 local TITLEBAR_SEARCH_CLEAR_BUTTON_SIZE = 14
-local VIEW_DROPDOWN_ARROW_TEXTURE = "Interface\\AddOns\\VesperGuild\\Media\\DropdownArrow-50"
+local VIEW_DROPDOWN_ARROW_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\DropdownArrow-50"
 
 local function clamp(value, minValue, maxValue)
     if value < minValue then
@@ -103,14 +103,14 @@ function BankWindow:OnInitialize()
 end
 
 function BankWindow:OnEnable()
-    self:RegisterMessage("VESPERGUILD_BANK_SNAPSHOT_UPDATED", "OnBankDataChanged")
-    self:RegisterMessage("VESPERGUILD_BANK_CHARACTER_UPDATED", "OnBankDataChanged")
-    self:RegisterMessage("VESPERGUILD_WARBAND_BANK_UPDATED", "OnBankDataChanged")
-    self:RegisterMessage("VESPERGUILD_CONFIG_CHANGED", "OnConfigChanged")
+    self:RegisterMessage("VESPERTOOLS_BANK_SNAPSHOT_UPDATED", "OnBankDataChanged")
+    self:RegisterMessage("VESPERTOOLS_BANK_CHARACTER_UPDATED", "OnBankDataChanged")
+    self:RegisterMessage("VESPERTOOLS_WARBAND_BANK_UPDATED", "OnBankDataChanged")
+    self:RegisterMessage("VESPERTOOLS_CONFIG_CHANGED", "OnConfigChanged")
 end
 
 function BankWindow:GetStore()
-    return VesperGuild:GetModule("BankStore", true)
+    return vesperTools:GetModule("BankStore", true)
 end
 
 function BankWindow:OnBankDataChanged()
@@ -135,7 +135,7 @@ function BankWindow:Toggle()
 end
 
 function BankWindow:HandleCloseRequest()
-    local bridge = VesperGuild:GetModule("BagsBridge", true)
+    local bridge = vesperTools:GetModule("BagsBridge", true)
     local store = self:GetStore()
     local bankIsLive = store
         and ((type(store.IsCharacterBankLive) == "function" and store:IsCharacterBankLive())
@@ -167,7 +167,7 @@ end
 
 function BankWindow:SelectDefaultViewForOpen(preferredViewKey)
     local store = self:GetStore()
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     local resolvedViewKey = "warband"
 
     local warbandSnapshot = store and type(store.GetWarbandBankSnapshot) == "function" and store:GetWarbandBankSnapshot() or nil
@@ -234,7 +234,7 @@ function BankWindow:SetSelectedView(viewKey)
     end
 
     self.selectedViewType = viewKey
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if bagsProfile then
         bagsProfile.lastViewedBankView = viewKey
     end
@@ -311,7 +311,7 @@ function BankWindow:AcquireViewMenuButton(menu)
     text:SetJustifyH("LEFT")
     text:SetJustifyV("MIDDLE")
     text:SetWordWrap(false)
-    VesperGuild:ApplyConfiguredFont(text, 12, "")
+    vesperTools:ApplyConfiguredFont(text, 12, "")
     button.text = text
 
     button:SetScript("OnClick", function(selfButton)
@@ -386,7 +386,7 @@ function BankWindow:SaveWindowState()
         return
     end
 
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if not bagsProfile then
         return
     end
@@ -401,7 +401,7 @@ function BankWindow:SaveWindowState()
 end
 
 function BankWindow:GetCollapsedCategoryTable(viewKey, create)
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if not bagsProfile or type(viewKey) ~= "string" or viewKey == "" then
         return nil
     end
@@ -439,7 +439,7 @@ function BankWindow:SetCategoryCollapsed(viewKey, categoryKey, isCollapsed)
         return
     end
 
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if bagsProfile and bagsProfile.collapsedBankCategories then
         bagsProfile.collapsedBankCategories[viewKey] = nil
     end
@@ -451,7 +451,7 @@ function BankWindow:ToggleCategoryCollapsed(viewKey, categoryKey)
 end
 
 function BankWindow:GetViewSettings()
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     local display = bagsProfile and bagsProfile.bankDisplay or nil
     local itemIconSize = math.max(24, math.min(56, math.floor((display and tonumber(display.itemIconSize) or DEFAULT_BUTTON_SIZE) + 0.5)))
     local columns = math.max(1, math.min(20, math.floor((display and tonumber(display.columns) or 10) + 0.5)))
@@ -472,7 +472,7 @@ function BankWindow:GetViewSettings()
 end
 
 function BankWindow:ToggleCombineStacks()
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if not bagsProfile then
         return
     end
@@ -716,13 +716,13 @@ function BankWindow:BuildDisplayItems(items, viewSettings)
 end
 
 function BankWindow:CreateWindow()
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     local width = bagsProfile and bagsProfile.bankWindow.width or 900
     local height = bagsProfile and bagsProfile.bankWindow.height or 560
 
-    local frame = CreateFrame("Frame", "VesperGuildBankWindow", UIParent, "BackdropTemplate")
+    local frame = CreateFrame("Frame", "vesperToolsBankWindow", UIParent, "BackdropTemplate")
     frame:SetSize(width, height)
-    VesperGuild:ApplyAddonWindowLayer(frame)
+    vesperTools:ApplyAddonWindowLayer(frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:SetResizable(false)
@@ -771,12 +771,12 @@ function BankWindow:CreateWindow()
     local titleText = titlebar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     titleText:SetPoint("LEFT", 10, 0)
     titleText:SetText(L["BANK_TITLE"])
-    VesperGuild:ApplyConfiguredFont(titleText, VesperGuild:GetConfiguredFontSize("roster", 12, 8, 24) + 4, "")
+    vesperTools:ApplyConfiguredFont(titleText, vesperTools:GetConfiguredFontSize("roster", 12, 8, 24) + 4, "")
     self.titleText = titleText
 
     local modeText = titlebar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     modeText:SetPoint("LEFT", titleText, "RIGHT", 10, 0)
-    VesperGuild:ApplyConfiguredFont(modeText, 12, "")
+    vesperTools:ApplyConfiguredFont(modeText, 12, "")
     self.modeText = modeText
 
     local searchBox = CreateFrame("EditBox", nil, titlebar, "BackdropTemplate")
@@ -791,7 +791,7 @@ function BankWindow:CreateWindow()
     })
     searchBox:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
     searchBox:SetBackdropBorderColor(1, 1, 1, 0.12)
-    VesperGuild:ApplyConfiguredFont(searchBox, 12, "")
+    vesperTools:ApplyConfiguredFont(searchBox, 12, "")
     searchBox:SetScript("OnTextChanged", function(selfBox, userInput)
         self:UpdateSearchPlaceholder()
         if userInput then
@@ -813,7 +813,7 @@ function BankWindow:CreateWindow()
     end)
     self.searchBox = searchBox
 
-    local searchClearButton = VesperGuild:CreateModernCloseButton(searchBox, function()
+    local searchClearButton = vesperTools:CreateModernCloseButton(searchBox, function()
         self:ClearSearch()
         searchBox:SetFocus()
     end, {
@@ -836,10 +836,10 @@ function BankWindow:CreateWindow()
     searchPlaceholder:SetJustifyV("MIDDLE")
     searchPlaceholder:SetWordWrap(false)
     searchPlaceholder:SetText(L["BANK_SEARCH_PLACEHOLDER"])
-    VesperGuild:ApplyConfiguredFont(searchPlaceholder, 12, "")
+    vesperTools:ApplyConfiguredFont(searchPlaceholder, 12, "")
     self.searchPlaceholder = searchPlaceholder
 
-    local closeButton = VesperGuild:CreateModernCloseButton(titlebar, function()
+    local closeButton = vesperTools:CreateModernCloseButton(titlebar, function()
         self:HideViewMenu()
         self:HandleCloseRequest()
     end, {
@@ -875,7 +875,7 @@ function BankWindow:CreateWindow()
         self:ToggleCombineStacks()
     end)
     combineStacksButton:SetScript("OnEnter", function(selfButton)
-        local bagsProfile = VesperGuild:GetBagsProfile()
+        local bagsProfile = vesperTools:GetBagsProfile()
         local isActive = bagsProfile and bagsProfile.bankDisplay and bagsProfile.bankDisplay.combineStacks and true or false
         self:ConfigureCombineStacksButtonTooltip(selfButton, isActive)
     end)
@@ -897,7 +897,7 @@ function BankWindow:CreateWindow()
     local combineStacksButtonText = combineStacksButton:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     combineStacksButtonText:SetPoint("CENTER", 0, 0)
     combineStacksButtonText:SetText(L["BAGS_COMBINE_BUTTON"])
-    VesperGuild:ApplyConfiguredFont(combineStacksButtonText, 11, "")
+    vesperTools:ApplyConfiguredFont(combineStacksButtonText, 11, "")
     self.combineStacksButtonText = combineStacksButtonText
 
     local depositButton = CreateFrame("Button", nil, navFrame, "BackdropTemplate")
@@ -928,7 +928,7 @@ function BankWindow:CreateWindow()
     local depositButtonText = depositButton:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     depositButtonText:SetPoint("CENTER", 0, 0)
     depositButtonText:SetText(L["BANK_DEPOSIT_BUTTON"])
-    VesperGuild:ApplyConfiguredFont(depositButtonText, 11, "")
+    vesperTools:ApplyConfiguredFont(depositButtonText, 11, "")
     self.depositButtonText = depositButtonText
 
     local viewDropdown = CreateFrame("Button", nil, navFrame, "BackdropTemplate")
@@ -956,7 +956,7 @@ function BankWindow:CreateWindow()
     viewDropdownText:SetJustifyH("LEFT")
     viewDropdownText:SetJustifyV("MIDDLE")
     viewDropdownText:SetWordWrap(false)
-    VesperGuild:ApplyConfiguredFont(viewDropdownText, 12, "")
+    vesperTools:ApplyConfiguredFont(viewDropdownText, 12, "")
     self.viewDropdownText = viewDropdownText
 
     local viewDropdownArrow = viewDropdown:CreateTexture(nil, "ARTWORK")
@@ -976,7 +976,7 @@ function BankWindow:CreateWindow()
     emptyText:SetWidth(math.max(620, width - 60))
     emptyText:SetJustifyH("LEFT")
     emptyText:SetText(L["BANK_EMPTY"])
-    VesperGuild:ApplyConfiguredFont(emptyText, 12, "")
+    vesperTools:ApplyConfiguredFont(emptyText, 12, "")
     emptyText:Hide()
     self.emptyText = emptyText
 
@@ -1083,7 +1083,7 @@ function BankWindow:AcquireSectionFrame()
     local title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 0, 0)
     title:SetJustifyH("LEFT")
-    VesperGuild:ApplyConfiguredFont(title, 14, "")
+    vesperTools:ApplyConfiguredFont(title, 14, "")
     section.title = title
 
     local divider = section:CreateTexture(nil, "BACKGROUND")
@@ -1125,13 +1125,13 @@ function BankWindow:AcquireItemButton()
 
     local count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     count:SetPoint("BOTTOMRIGHT", -2, 2)
-    VesperGuild:ApplyConfiguredFont(count, 11, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(count, 11, "OUTLINE")
     button.count = count
 
     local itemLevel = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     itemLevel:SetPoint("TOPLEFT", 3, -2)
     itemLevel:SetJustifyH("LEFT")
-    VesperGuild:ApplyConfiguredFont(itemLevel, 9, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(itemLevel, 9, "OUTLINE")
     itemLevel:Hide()
     button.itemLevel = itemLevel
 
@@ -1160,7 +1160,7 @@ function BankWindow:AcquireSummaryButton()
 
     local count = button:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     count:SetPoint("CENTER", 0, 0)
-    VesperGuild:ApplyConfiguredFont(count, 13, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(count, 13, "OUTLINE")
     button.count = count
 
     self.summaryButtons[#self.summaryButtons + 1] = button
@@ -1282,8 +1282,8 @@ function BankWindow:ConfigureItemButton(button, record, context, viewSettings)
     local itemLevelFontSize = math.max(8, math.min(18, tonumber(viewSettings and viewSettings.itemLevelFontSize) or 9))
 
     button:SetSize(itemIconSize, itemIconSize)
-    VesperGuild:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
-    VesperGuild:ApplyConfiguredFont(button.itemLevel, itemLevelFontSize, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(button.itemLevel, itemLevelFontSize, "OUTLINE")
 
     button.icon:SetTexture(record.iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark")
     button.count:SetText(((button.isCombined and button.totalCount > 1) or (tonumber(record.stackCount) or 1) > 1) and tostring(button.totalCount) or "")
@@ -1349,7 +1349,7 @@ function BankWindow:ConfigureSummaryButton(button, summaryEntry, viewSettings)
     button.icon:SetTexture(summaryEntry.iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark")
     button.count:SetText(tostring(button.summaryCount))
     button.count:SetTextColor(0.95, 0.95, 0.95, 1)
-    VesperGuild:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
     button:SetScript("OnEnter", function(selfButton)
         self:ConfigureSummaryTooltip(selfButton)
     end)
@@ -1383,7 +1383,7 @@ function BankWindow:ResolveViewContext(viewKey)
     return {
         key = "character",
         label = L["BANK_SWITCH_CHARACTER"],
-        ownerName = record and record.fullName or VesperGuild:GetCurrentCharacterFullName(),
+        ownerName = record and record.fullName or vesperTools:GetCurrentCharacterFullName(),
         snapshot = record and record.bank or nil,
         characterKey = characterKey,
         categories = characterKey and store:GetCharacterBankCategoryList(characterKey) or {},

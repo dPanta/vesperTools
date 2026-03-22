@@ -10,23 +10,28 @@ if not LibStub or not LibStub("AceAddon-3.0", true) then
     print("|cffFF0000" .. addonName .. ":|r " .. (localeDefaults.ACE3_LIBRARIES_MISSING or "Ace3 libraries not found. Please install Ace3 in the Libs/ folder."))
     
     -- Fallback simple slash command to prove the addon is actually loaded
-    SLASH_VESPERGUILD1 = "/vg"
-    SLASH_VESPERGUILD2 = "/vesper"
-    SlashCmdList["VESPERGUILD"] = function(msg)
+    SLASH_VESPERTOOLS1 = "/vg"
+    SLASH_VESPERTOOLS2 = "/vesper"
+    SlashCmdList["VESPERTOOLS"] = function(msg)
         print("|cffFF0000" .. addonName .. ":|r " .. (localeDefaults.NO_LIB_MODE_MESSAGE or "Running in No-Lib mode. Please install Ace3."))
     end
     return
 end
 
 -- Global Addon Objectt
-VesperGuild = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "AceEvent-3.0")
+vesperTools = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "AceEvent-3.0")
 
 local AceLocale = LibStub("AceLocale-3.0", true)
 if AceLocale then
     L = AceLocale:GetLocale(addonName)
 end
 addonTable.L = L
-VesperGuild.L = L
+vesperTools.L = L
+
+local CURRENT_MAIN_DB_NAME = "vesperToolsDB"
+local CURRENT_BAGS_DB_NAME = "vesperToolsBagsDB"
+local LEGACY_MAIN_DB_NAME = "VesperGuildDB"
+local LEGACY_BAGS_DB_NAME = "VesperGuildBagsDB"
 
 local function RequestGuildRosterUpdate()
     if C_GuildInfo and C_GuildInfo.GuildRoster then
@@ -37,7 +42,7 @@ local function RequestGuildRosterUpdate()
 end
 
 -- Shared default font used when profile-specific value is missing or invalid.
-local DEFAULT_FONT_PATH = "Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf"
+local DEFAULT_FONT_PATH = "Interface\\AddOns\\vesperTools\\Media\\expressway.ttf"
 local DEFAULT_PRIMARY_HEARTHSTONE_ID = 6948
 local PREFERRED_SECONDARY_HEARTHSTONE_ID = 253629 -- Personal Key to the Arcantina
 local DEFAULT_TOP_UTILITY_BUTTON_SIZE = 52
@@ -58,16 +63,16 @@ local DEFAULT_BANK_ITEM_ICON_SIZE = 38
 local DEFAULT_BANK_STACK_COUNT_FONT_SIZE = 11
 local DEFAULT_BANK_ITEM_LEVEL_FONT_SIZE = 9
 local DEFAULT_BANK_QUALITY_GLOW_INTENSITY = 0.65
-local MODERN_CLOSE_BUTTON_TEXTURE = "Interface\\AddOns\\VesperGuild\\Media\\CloseModern-128"
+local MODERN_CLOSE_BUTTON_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\CloseModern-128"
 
 -- Curated font options exposed in configuration UI.
 local FONT_OPTIONS = {
-    { label = "Expressway", path = "Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf" },
-    { label = "Noto Sans SemiBold", path = "Interface\\AddOns\\VesperGuild\\Media\\NotoSans-SemiBold.ttf" },
-    { label = "Ubuntu Nerd Regular", path = "Interface\\AddOns\\VesperGuild\\Media\\UbuntuNerdFont-Regular.ttf" },
-    { label = "Ubuntu Nerd Bold", path = "Interface\\AddOns\\VesperGuild\\Media\\UbuntuNerdFont-Bold.ttf" },
-    { label = "Ubuntu Nerd Condensed", path = "Interface\\AddOns\\VesperGuild\\Media\\UbuntuNerdFont-Condensed.ttf" },
-    { label = "Ubuntu Nerd Propo Regular", path = "Interface\\AddOns\\VesperGuild\\Media\\UbuntuNerdFontPropo-Regular.ttf" },
+    { label = "Expressway", path = "Interface\\AddOns\\vesperTools\\Media\\expressway.ttf" },
+    { label = "Noto Sans SemiBold", path = "Interface\\AddOns\\vesperTools\\Media\\NotoSans-SemiBold.ttf" },
+    { label = "Ubuntu Nerd Regular", path = "Interface\\AddOns\\vesperTools\\Media\\UbuntuNerdFont-Regular.ttf" },
+    { label = "Ubuntu Nerd Bold", path = "Interface\\AddOns\\vesperTools\\Media\\UbuntuNerdFont-Bold.ttf" },
+    { label = "Ubuntu Nerd Condensed", path = "Interface\\AddOns\\vesperTools\\Media\\UbuntuNerdFont-Condensed.ttf" },
+    { label = "Ubuntu Nerd Propo Regular", path = "Interface\\AddOns\\vesperTools\\Media\\UbuntuNerdFontPropo-Regular.ttf" },
 }
 
 -- Ordered list of hearthstone variants exposed in config and utility buttons.
@@ -228,17 +233,17 @@ local function getItemNameAndIcon(itemID)
 end
 
 -- Return available bundled font options for config UI.
-function VesperGuild:GetFontOptions()
+function vesperTools:GetFontOptions()
     return FONT_OPTIONS
 end
 
 -- Use one fixed high strata for addon-owned windows so they stay above regular UI.
-function VesperGuild:GetAddonWindowStrata()
+function vesperTools:GetAddonWindowStrata()
     return ADDON_WINDOW_STRATA
 end
 
 -- Normalize addon-owned frames onto the shared strata and optionally pin a frame level.
-function VesperGuild:ApplyAddonWindowLayer(frame, frameLevel)
+function vesperTools:ApplyAddonWindowLayer(frame, frameLevel)
     if not frame then
         return
     end
@@ -253,7 +258,7 @@ function VesperGuild:ApplyAddonWindowLayer(frame, frameLevel)
     end
 end
 
-function VesperGuild:CreateModernCloseButton(parent, onClick, options)
+function vesperTools:CreateModernCloseButton(parent, onClick, options)
     if not parent then
         return nil
     end
@@ -360,12 +365,12 @@ function VesperGuild:CreateModernCloseButton(parent, onClick, options)
 end
 
 -- Return ordered canonical hearthstone IDs.
-function VesperGuild:GetHearthstoneCatalog()
+function vesperTools:GetHearthstoneCatalog()
     return HEARTHSTONE_CATALOG
 end
 
 -- Return currently usable hearthstone variants with cached display metadata.
-function VesperGuild:GetAvailableHearthstoneOptions()
+function vesperTools:GetAvailableHearthstoneOptions()
     local options = {}
 
     for i = 1, #HEARTHSTONE_CATALOG do
@@ -394,7 +399,7 @@ function VesperGuild:GetAvailableHearthstoneOptions()
 end
 
 -- Return hearthstones available for primary selection (excludes configured blacklist).
-function VesperGuild:GetPrimaryHearthstoneOptions()
+function vesperTools:GetPrimaryHearthstoneOptions()
     local options = self:GetAvailableHearthstoneOptions()
     local filtered = {}
 
@@ -409,7 +414,7 @@ function VesperGuild:GetPrimaryHearthstoneOptions()
 end
 
 -- Return all currently owned toys with cached display metadata.
-function VesperGuild:GetOwnedToyOptions()
+function vesperTools:GetOwnedToyOptions()
     local options = {}
     if not (C_ToyBox and PlayerHasToy) then
         return options
@@ -474,7 +479,7 @@ function VesperGuild:GetOwnedToyOptions()
 end
 
 -- Return sanitized persisted toy whitelist.
-function VesperGuild:GetConfiguredToyWhitelist()
+function vesperTools:GetConfiguredToyWhitelist()
     local profile = self.db and self.db.profile
     if not profile then
         return {}
@@ -500,7 +505,7 @@ function VesperGuild:GetConfiguredToyWhitelist()
 end
 
 -- Check if a toy is currently whitelisted.
-function VesperGuild:IsToyWhitelisted(itemID)
+function vesperTools:IsToyWhitelisted(itemID)
     local targetID = tonumber(itemID)
     if not targetID then
         return false
@@ -516,7 +521,7 @@ function VesperGuild:IsToyWhitelisted(itemID)
 end
 
 -- Add/remove one toy from the persisted whitelist.
-function VesperGuild:SetToyWhitelisted(itemID, isWhitelisted)
+function vesperTools:SetToyWhitelisted(itemID, isWhitelisted)
     local targetID = tonumber(itemID)
     if not targetID then
         return false
@@ -559,7 +564,7 @@ end
 
 -- Return currently owned toys that are also in the user whitelist.
 -- The output order follows whitelist order so users can control flyout arrangement.
-function VesperGuild:GetWhitelistedOwnedToyOptions()
+function vesperTools:GetWhitelistedOwnedToyOptions()
     local whitelist = self:GetConfiguredToyWhitelist()
     if #whitelist == 0 then
         return {}
@@ -587,7 +592,7 @@ function VesperGuild:GetWhitelistedOwnedToyOptions()
 end
 
 -- Read saved primary hearthstone selection with profile/default fallback.
-function VesperGuild:GetConfiguredPrimaryHearthstoneID()
+function vesperTools:GetConfiguredPrimaryHearthstoneID()
     local profile = self.db and self.db.profile
     if not profile then
         return DEFAULT_PRIMARY_HEARTHSTONE_ID
@@ -600,12 +605,12 @@ function VesperGuild:GetConfiguredPrimaryHearthstoneID()
 end
 
 -- Shared range used by both config UI and runtime layout for top utility button sizing.
-function VesperGuild:GetTopUtilityButtonSizeBounds()
+function vesperTools:GetTopUtilityButtonSizeBounds()
     return MIN_TOP_UTILITY_BUTTON_SIZE, MAX_TOP_UTILITY_BUTTON_SIZE, DEFAULT_TOP_UTILITY_BUTTON_SIZE
 end
 
 -- Read saved utility button size with sanitized bounds and default fallback.
-function VesperGuild:GetConfiguredTopUtilityButtonSize()
+function vesperTools:GetConfiguredTopUtilityButtonSize()
     local minSize, maxSize, defaultSize = self:GetTopUtilityButtonSizeBounds()
     local profile = self.db and self.db.profile
     if not profile then
@@ -626,7 +631,7 @@ end
 
 -- Resolve usable primary hearthstone.
 -- If configured value is unavailable, auto-fallback to first available and persist it.
-function VesperGuild:ResolvePrimaryHearthstoneID()
+function vesperTools:ResolvePrimaryHearthstoneID()
     local configuredID = self:GetConfiguredPrimaryHearthstoneID()
     local options = self:GetPrimaryHearthstoneOptions()
     if #options == 0 then
@@ -652,7 +657,7 @@ function VesperGuild:ResolvePrimaryHearthstoneID()
 end
 
 -- Resolve secondary hearthstone with Arcantina-first preference.
-function VesperGuild:GetSecondaryHearthstoneID(primaryID)
+function vesperTools:GetSecondaryHearthstoneID(primaryID)
     local options = self:GetAvailableHearthstoneOptions()
     if #options == 0 then
         return nil
@@ -692,7 +697,7 @@ function VesperGuild:GetSecondaryHearthstoneID(primaryID)
 end
 
 -- Resolve active font path from profile with default fallback.
-function VesperGuild:GetConfiguredFontPath()
+function vesperTools:GetConfiguredFontPath()
     local profile = self.db and self.db.profile
     if not profile then
         return DEFAULT_FONT_PATH
@@ -709,7 +714,7 @@ function VesperGuild:GetConfiguredFontPath()
 end
 
 -- Resolve friendly label for a font path.
-function VesperGuild:GetFontLabelByPath(path)
+function vesperTools:GetFontLabelByPath(path)
     for i = 1, #FONT_OPTIONS do
         local option = FONT_OPTIONS[i]
         if option.path == path then
@@ -721,7 +726,7 @@ end
 
 -- Apply current configured font to a FontString with defensive fallbacks.
 -- Fallback order: configured font -> addon default -> Blizzard standard font.
-function VesperGuild:ApplyConfiguredFont(fontString, size, flags)
+function vesperTools:ApplyConfiguredFont(fontString, size, flags)
     if not fontString or type(fontString.SetFont) ~= "function" then
         return false
     end
@@ -766,7 +771,7 @@ end
 
 -- Return clamped opacity for a named frame key from profile style config.
 -- Valid range is [0.10, 1.00] to avoid fully invisible windows.
-function VesperGuild:GetConfiguredOpacity(frameKey)
+function vesperTools:GetConfiguredOpacity(frameKey)
     local defaultOpacity = 0.95
     local profile = self.db and self.db.profile
     if not profile then
@@ -794,7 +799,7 @@ end
 
 -- Return clamped font size for a frame key from profile style config.
 -- Keeps per-frame size values stable even with stale/invalid SavedVariables.
-function VesperGuild:GetConfiguredFontSize(frameKey, defaultSize, minSize, maxSize)
+function vesperTools:GetConfiguredFontSize(frameKey, defaultSize, minSize, maxSize)
     local resolvedDefault = tonumber(defaultSize) or 12
     local resolvedMin = tonumber(minSize) or 8
     local resolvedMax = tonumber(maxSize) or 24
@@ -832,7 +837,7 @@ function VesperGuild:GetConfiguredFontSize(frameKey, defaultSize, minSize, maxSi
 end
 
 -- Open custom configuration window if module is loaded.
-function VesperGuild:OpenConfig()
+function vesperTools:OpenConfig()
     local Configuration = self:GetModule("Configuration", true)
     if Configuration and type(Configuration.OpenConfig) == "function" then
         Configuration:OpenConfig()
@@ -841,9 +846,21 @@ function VesperGuild:OpenConfig()
     self:Print(L["CONFIG_MODULE_NOT_FOUND"])
 end
 
-function VesperGuild:OnInitialize()
+local function MigrateLegacySavedVariables()
+    if _G[CURRENT_MAIN_DB_NAME] == nil and _G[LEGACY_MAIN_DB_NAME] ~= nil then
+        _G[CURRENT_MAIN_DB_NAME] = _G[LEGACY_MAIN_DB_NAME]
+    end
+
+    if _G[CURRENT_BAGS_DB_NAME] == nil and _G[LEGACY_BAGS_DB_NAME] ~= nil then
+        _G[CURRENT_BAGS_DB_NAME] = _G[LEGACY_BAGS_DB_NAME]
+    end
+end
+
+function vesperTools:OnInitialize()
+    MigrateLegacySavedVariables()
+
     -- Called when the addon is loaded
-    self.db = LibStub("AceDB-3.0"):New("VesperGuildDB", {
+    self.db = LibStub("AceDB-3.0"):New(CURRENT_MAIN_DB_NAME, {
         profile = {
             icon = {
                 point = "CENTER",
@@ -880,7 +897,7 @@ function VesperGuild:OnInitialize()
         },
     }, true)
 
-    self.bagsDB = LibStub("AceDB-3.0"):New("VesperGuildBagsDB", {
+    self.bagsDB = LibStub("AceDB-3.0"):New(CURRENT_BAGS_DB_NAME, {
         profile = {
             window = {
                 point = "CENTER",
@@ -953,11 +970,11 @@ function VesperGuild:OnInitialize()
     self:Print(L["ADDON_LOADED_MESSAGE"])
 end
 
-function VesperGuild:GetBagsDB()
+function vesperTools:GetBagsDB()
     return self.bagsDB
 end
 
-function VesperGuild:GetBagsProfile()
+function vesperTools:GetBagsProfile()
     if not self.bagsDB then
         return nil
     end
@@ -1027,7 +1044,7 @@ function VesperGuild:GetBagsProfile()
     return profile
 end
 
-function VesperGuild:GetCurrentCharacterGUID()
+function vesperTools:GetCurrentCharacterGUID()
     local guid = UnitGUID("player")
     if type(guid) == "string" and guid ~= "" then
         return guid
@@ -1038,13 +1055,13 @@ function VesperGuild:GetCurrentCharacterGUID()
     return string.format("name:%s-%s", name, realm)
 end
 
-function VesperGuild:GetCurrentCharacterFullName()
+function vesperTools:GetCurrentCharacterFullName()
     local name = UnitName("player") or UNKNOWN
     local realm = GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName() or "UnknownRealm"
     return string.format("%s-%s", name, realm)
 end
 
-function VesperGuild:GetCharacterBagSnapshot(characterKey)
+function vesperTools:GetCharacterBagSnapshot(characterKey)
     local BagsStore = self:GetModule("BagsStore", true)
     if not BagsStore then
         return nil
@@ -1052,7 +1069,7 @@ function VesperGuild:GetCharacterBagSnapshot(characterKey)
     return BagsStore:GetCharacterBagSnapshot(characterKey)
 end
 
-function VesperGuild:GetCharacterItemCount(characterKey, itemID)
+function vesperTools:GetCharacterItemCount(characterKey, itemID)
     local BagsStore = self:GetModule("BagsStore", true)
     if not BagsStore then
         return 0
@@ -1060,7 +1077,7 @@ function VesperGuild:GetCharacterItemCount(characterKey, itemID)
     return BagsStore:GetCharacterItemCount(characterKey, itemID)
 end
 
-function VesperGuild:GetAccountItemOwners(itemID)
+function vesperTools:GetAccountItemOwners(itemID)
     local BagsStore = self:GetModule("BagsStore", true)
     if not BagsStore then
         return nil
@@ -1068,7 +1085,7 @@ function VesperGuild:GetAccountItemOwners(itemID)
     return BagsStore:GetAccountItemOwners(itemID)
 end
 
-function VesperGuild:GetCharacterCategoryItems(characterKey, categoryKey)
+function vesperTools:GetCharacterCategoryItems(characterKey, categoryKey)
     local BagsStore = self:GetModule("BagsStore", true)
     if not BagsStore then
         return {}
@@ -1076,7 +1093,7 @@ function VesperGuild:GetCharacterCategoryItems(characterKey, categoryKey)
     return BagsStore:GetCharacterCategoryItems(characterKey, categoryKey)
 end
 
-function VesperGuild:GetAccountCategoryItems(categoryKey)
+function vesperTools:GetAccountCategoryItems(categoryKey)
     local BagsStore = self:GetModule("BagsStore", true)
     if not BagsStore then
         return nil
@@ -1084,7 +1101,7 @@ function VesperGuild:GetAccountCategoryItems(categoryKey)
     return BagsStore:GetAccountCategoryItems(categoryKey)
 end
 
-function VesperGuild:MarkFullCarryRescan(reason)
+function vesperTools:MarkFullCarryRescan(reason)
     local BagsStore = self:GetModule("BagsStore", true)
     if not BagsStore then
         return
@@ -1092,7 +1109,7 @@ function VesperGuild:MarkFullCarryRescan(reason)
     BagsStore:MarkFullCarryRescan(reason)
 end
 
-function VesperGuild:GetOnlineGuildMembers()
+function vesperTools:GetOnlineGuildMembers()
     local members = {}
     if not IsInGuild() then
         return members
@@ -1118,7 +1135,7 @@ function VesperGuild:GetOnlineGuildMembers()
     return members
 end
 
-function VesperGuild:UpdateFloatingIconOnlineCount()
+function vesperTools:UpdateFloatingIconOnlineCount()
     if not self.iconButton or not self.iconButton.onlineCountText then
         return
     end
@@ -1131,13 +1148,13 @@ function VesperGuild:UpdateFloatingIconOnlineCount()
     self.iconButton.onlineCountText:SetText(tostring(count))
 end
 
-function VesperGuild:OnGuildRosterUpdate()
+function vesperTools:OnGuildRosterUpdate()
     self:UpdateFloatingIconOnlineCount()
 end
 
 -- Baaaaaaa, create a sheep
-function VesperGuild:CreateFloatingIcon()
-    local btn = CreateFrame("Button", "VesperGuildIcon", UIParent)
+function vesperTools:CreateFloatingIcon()
+    local btn = CreateFrame("Button", "vesperToolsIcon", UIParent)
     btn:SetSize(40, 40)
     btn:SetMovable(true)
     btn:EnableMouse(true)
@@ -1156,7 +1173,7 @@ function VesperGuild:CreateFloatingIcon()
     
     local countText = btn:CreateFontString(nil, "OVERLAY")
     countText:SetPoint("CENTER", 0, 0)
-    countText:SetFont("Interface\\AddOns\\VesperGuild\\Media\\UbuntuNerdFont-Bold.ttf", 20, "OUTLINE")
+    countText:SetFont("Interface\\AddOns\\vesperTools\\Media\\UbuntuNerdFont-Bold.ttf", 20, "OUTLINE")
     countText:SetTextColor(1, 1, 1, 1)
     countText:SetShadowOffset(1, -1)
     countText:SetShadowColor(0, 0, 0, 1)
@@ -1173,19 +1190,19 @@ function VesperGuild:CreateFloatingIcon()
     btn:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         local point, _, relativePoint, x, y = self:GetPoint()
-        VesperGuild.db.profile.icon.point = point
-        VesperGuild.db.profile.icon.x = x
-        VesperGuild.db.profile.icon.y = y
+        vesperTools.db.profile.icon.point = point
+        vesperTools.db.profile.icon.x = x
+        vesperTools.db.profile.icon.y = y
     end)
     
     -- Click Script - left click to toggle roster and portals (no shift required)
     btn:SetScript("OnClick", function(self, button)
         if button == "LeftButton" and not IsShiftKeyDown() then
-            local Roster = VesperGuild:GetModule("Roster", true)
-            local Portals = VesperGuild:GetModule("Portals", true)
+            local Roster = vesperTools:GetModule("Roster", true)
+            local Portals = vesperTools:GetModule("Portals", true)
             if Roster then Roster:Toggle() end
             if Portals then Portals:Toggle() end
-            VesperGuild:SendMessage("VESPERGUILD_ADDON_OPENED")
+            vesperTools:SendMessage("VESPERTOOLS_ADDON_OPENED")
         end
     end)
 
@@ -1195,7 +1212,7 @@ function VesperGuild:CreateFloatingIcon()
             RequestGuildRosterUpdate()
         end
 
-        local onlineMembers = VesperGuild:GetOnlineGuildMembers()
+        local onlineMembers = vesperTools:GetOnlineGuildMembers()
 
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(L["MINIMAP_TOOLTIP_TITLE"], 1, 1, 1)
@@ -1226,7 +1243,7 @@ function VesperGuild:CreateFloatingIcon()
     btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
-function VesperGuild:OnEnable()
+function vesperTools:OnEnable()
     -- Called when the addon is enabled
     self:RegisterChatCommand("vesper", "HandleChatCommand")
     self:RegisterChatCommand("vg", "HandleChatCommand")
@@ -1250,11 +1267,11 @@ function VesperGuild:OnEnable()
     self:UpdateFloatingIconOnlineCount()
 end
 
-function VesperGuild:OnDisable()
+function vesperTools:OnDisable()
     -- Called when the addon is disabled
 end
 
-function VesperGuild:HandleChatCommand(input)
+function vesperTools:HandleChatCommand(input)
     -- Normalize chat command once so aliases/casing are handled uniformly.
     local normalizedInput = input and strtrim(input) or ""
     local loweredInput = string.lower(normalizedInput)
@@ -1266,7 +1283,7 @@ function VesperGuild:HandleChatCommand(input)
         if Roster and Portals then
             Roster:Toggle()
             Portals:Toggle()
-            self:SendMessage("VESPERGUILD_ADDON_OPENED")
+            self:SendMessage("VESPERTOOLS_ADDON_OPENED")
         else
             self:Print(L["ROSTER_OR_PORTALS_MODULE_MISSING"])
         end
@@ -1290,7 +1307,7 @@ function VesperGuild:HandleChatCommand(input)
     elseif loweredInput == "reset" then
         -- Reset icon position
         self.db.profile.icon = { point = "CENTER", x = 0, y = 0 }
-        local icon = _G["VesperGuildIcon"]
+        local icon = _G["vesperToolsIcon"]
         if icon then
             icon:ClearAllPoints()
             icon:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
@@ -1298,7 +1315,7 @@ function VesperGuild:HandleChatCommand(input)
 
         -- Reset roster frame position
         self.db.profile.rosterPosition = nil
-        local rosterFrame = _G["VesperGuildRosterFrame"]
+        local rosterFrame = _G["vesperToolsFrame"]
         if rosterFrame then
             rosterFrame:ClearAllPoints()
             rosterFrame:SetPoint("RIGHT", UIParent, "CENTER", -250, 0)
@@ -1306,7 +1323,7 @@ function VesperGuild:HandleChatCommand(input)
 
         -- Reset portals frame position
         self.db.profile.portalsPosition = nil
-        local portalFrame = _G["VesperGuildPortalFrame"]
+        local portalFrame = _G["vesperToolsPortalFrame"]
         if portalFrame then
             portalFrame:ClearAllPoints()
             portalFrame:SetPoint("LEFT", UIParent, "CENTER", 250, 0)
@@ -1332,14 +1349,14 @@ function VesperGuild:HandleChatCommand(input)
             }
         end
 
-        local bagsFrame = _G["VesperGuildBagsWindow"]
+        local bagsFrame = _G["vesperToolsBagsWindow"]
         if bagsFrame then
             bagsFrame:ClearAllPoints()
             bagsFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
             bagsFrame:SetSize(DEFAULT_BAGS_WINDOW_WIDTH, DEFAULT_BAGS_WINDOW_HEIGHT)
         end
 
-        local bankFrame = _G["VesperGuildBankWindow"]
+        local bankFrame = _G["vesperToolsBankWindow"]
         if bankFrame then
             bankFrame:ClearAllPoints()
             bankFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)

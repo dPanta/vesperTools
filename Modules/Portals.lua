@@ -1,6 +1,6 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local Portals = VesperGuild:NewModule("Portals", "AceConsole-3.0", "AceEvent-3.0")
-local L = VesperGuild.L
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local Portals = vesperTools:NewModule("Portals", "AceConsole-3.0", "AceEvent-3.0")
+local L = vesperTools.L
 local FALLBACK_ICON_TEXTURE = "Interface\\Icons\\INV_Misc_QuestionMark"
 local TOY_FLYOUT_BUTTON_ICON = "Interface\\Icons\\INV_Misc_Toy_10"
 local TOP_UTILITY_BUTTON_GAP = 10
@@ -149,7 +149,7 @@ end
 
 -- Read configured top utility icon size (hearthstones/toys) with stable fallback.
 function Portals:GetTopUtilityButtonSize()
-    return VesperGuild:GetConfiguredTopUtilityButtonSize()
+    return vesperTools:GetConfiguredTopUtilityButtonSize()
 end
 
 -- Keep utility panel height proportional to icon size while preserving current spacing.
@@ -158,7 +158,7 @@ function Portals:GetTopUtilityFrameHeight(buttonSize)
 end
 
 function Portals:OnEnable()
-    self:RegisterMessage("VESPERGUILD_CONFIG_CHANGED", "OnConfigChanged")
+    self:RegisterMessage("VESPERTOOLS_CONFIG_CHANGED", "OnConfigChanged")
     self:RegisterEvent("BAG_UPDATE_DELAYED")
     self:RegisterEvent("BAG_UPDATE_COOLDOWN")
     self:RegisterEvent("TOYS_UPDATED")
@@ -213,8 +213,8 @@ end
 
 -- Apply configured background opacity to all portal-related panels.
 function Portals:ApplyBackdropOpacity()
-    local portalsOpacity = VesperGuild:GetConfiguredOpacity("portals")
-    local bestKeysOpacity = VesperGuild:GetConfiguredOpacity("bestKeys")
+    local portalsOpacity = vesperTools:GetConfiguredOpacity("portals")
+    local bestKeysOpacity = vesperTools:GetConfiguredOpacity("bestKeys")
 
     if self.VesperPortalsUI then
         self.VesperPortalsUI:SetBackdropColor(0.07, 0.07, 0.07, portalsOpacity)
@@ -469,7 +469,7 @@ function Portals:UpdateCooldownTextFont(button)
 
     local buttonSize = tonumber(button:GetWidth()) or tonumber(button:GetHeight()) or 52
     local fontSize = math.max(10, math.floor((buttonSize * 0.32) + 0.5))
-    VesperGuild:ApplyConfiguredFont(button.cooldownText, fontSize, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(button.cooldownText, fontSize, "OUTLINE")
     button.cooldownText:SetShadowColor(0, 0, 0, 1)
     button.cooldownText:SetShadowOffset(1, -1)
 end
@@ -751,15 +751,15 @@ function Portals:CreateToyFlyoutFrame()
     end
 
     local buttonSize = self:GetTopUtilityButtonSize()
-    self.toyFlyoutFrame = CreateFrame("Frame", "VesperGuildToyFlyoutFrame", self.topUtilityFrame, "BackdropTemplate")
+    self.toyFlyoutFrame = CreateFrame("Frame", "vesperToolsToyFlyoutFrame", self.topUtilityFrame, "BackdropTemplate")
     self.toyFlyoutFrame:SetSize(buttonSize + (TOY_FLYOUT_PADDING * 2), buttonSize + (TOY_FLYOUT_PADDING * 2))
-    VesperGuild:ApplyAddonWindowLayer(self.toyFlyoutFrame, (self.topUtilityFrame:GetFrameLevel() or 0) + 2)
+    vesperTools:ApplyAddonWindowLayer(self.toyFlyoutFrame, (self.topUtilityFrame:GetFrameLevel() or 0) + 2)
     self.toyFlyoutFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    self.toyFlyoutFrame:SetBackdropColor(0.07, 0.07, 0.07, VesperGuild:GetConfiguredOpacity("portals"))
+    self.toyFlyoutFrame:SetBackdropColor(0.07, 0.07, 0.07, vesperTools:GetConfiguredOpacity("portals"))
     self.toyFlyoutFrame:SetBackdropBorderColor(0, 0, 0, 0)
     self.toyFlyoutFrame:Hide()
 
@@ -849,7 +849,7 @@ function Portals:RefreshToyFlyout()
         return
     end
 
-    local toys = VesperGuild:GetWhitelistedOwnedToyOptions()
+    local toys = vesperTools:GetWhitelistedOwnedToyOptions()
     local hasToys = type(toys) == "table" and #toys > 0
     local buttonSize = self:GetTopUtilityButtonSize()
 
@@ -999,17 +999,17 @@ function Portals:CreateTopUtilityFrame()
 
     local buttonSize = self:GetTopUtilityButtonSize()
     local frameHeight = self:GetTopUtilityFrameHeight(buttonSize)
-    self.topUtilityFrame = CreateFrame("Frame", "VesperGuildTopUtilityFrame", self.VesperPortalsUI, "BackdropTemplate")
+    self.topUtilityFrame = CreateFrame("Frame", "vesperToolsTopUtilityFrame", self.VesperPortalsUI, "BackdropTemplate")
     self.topUtilityFrame:SetSize((TOP_UTILITY_PADDING * 2) + (2 * buttonSize) + TOP_UTILITY_BUTTON_GAP, frameHeight)
     self.topUtilityFrame:SetPoint("BOTTOM", self.VesperPortalsUI, "TOP", 0, 10)
-    VesperGuild:ApplyAddonWindowLayer(self.topUtilityFrame)
+    vesperTools:ApplyAddonWindowLayer(self.topUtilityFrame)
 
     self.topUtilityFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    self.topUtilityFrame:SetBackdropColor(0.07, 0.07, 0.07, VesperGuild:GetConfiguredOpacity("portals"))
+    self.topUtilityFrame:SetBackdropColor(0.07, 0.07, 0.07, vesperTools:GetConfiguredOpacity("portals"))
     self.topUtilityFrame:SetBackdropBorderColor(self.classColor.r, self.classColor.g, self.classColor.b, 1)
 
     -- Two hearthstone buttons are always available.
@@ -1210,14 +1210,14 @@ function Portals:RefreshHearthstoneButtons()
         return
     end
 
-    local options = VesperGuild:GetAvailableHearthstoneOptions()
+    local options = vesperTools:GetAvailableHearthstoneOptions()
     local optionsByID = {}
     for i = 1, #options do
         optionsByID[options[i].itemID] = options[i]
     end
 
-    local primaryID = VesperGuild:ResolvePrimaryHearthstoneID()
-    local secondaryID = VesperGuild:GetSecondaryHearthstoneID(primaryID)
+    local primaryID = vesperTools:ResolvePrimaryHearthstoneID()
+    local secondaryID = vesperTools:GetSecondaryHearthstoneID(primaryID)
 
     self:ApplyHearthstoneOption(self.primaryHearthstoneButton, primaryID and optionsByID[primaryID] or nil)
     self:ApplyHearthstoneOption(self.secondaryHearthstoneButton, secondaryID and optionsByID[secondaryID] or nil)
@@ -1247,7 +1247,7 @@ function Portals:WarnMissingSeasonDungeonMetadata(curSeason, dataHandle)
     end
 
     if #unresolved > 0 then
-        VesperGuild:Print(string.format(L["PORTALS_MISSING_SEASON_DUNGEONS_FMT"], table.concat(unresolved, ", ")))
+        vesperTools:Print(string.format(L["PORTALS_MISSING_SEASON_DUNGEONS_FMT"], table.concat(unresolved, ", ")))
     end
 end
 
@@ -1257,18 +1257,18 @@ function Portals:CreatePortalFrame()
     -- Reuse player class color as a consistent accent across all portal panels.
     self.classColor = classColor
 
-    self.VesperPortalsUI = CreateFrame("Frame", "VesperGuildPortalFrame", UIParent, "BackdropTemplate")
+    self.VesperPortalsUI = CreateFrame("Frame", "vesperToolsPortalFrame", UIParent, "BackdropTemplate")
     self.VesperPortalsUI:SetSize(300, 160)
 
     -- Restore saved position or use default
-    if VesperGuild.db.profile.portalsPosition then
-        local pos = VesperGuild.db.profile.portalsPosition
+    if vesperTools.db.profile.portalsPosition then
+        local pos = vesperTools.db.profile.portalsPosition
         self.VesperPortalsUI:SetPoint(pos.point, UIParent, pos.relativePoint, pos.xOfs, pos.yOfs)
     else
         self.VesperPortalsUI:SetPoint("LEFT", UIParent, "CENTER", 250, 0)
     end
 
-    VesperGuild:ApplyAddonWindowLayer(self.VesperPortalsUI)
+    vesperTools:ApplyAddonWindowLayer(self.VesperPortalsUI)
     self.VesperPortalsUI:SetMovable(true)
     self.VesperPortalsUI:EnableMouse(true)
     self.VesperPortalsUI:RegisterForDrag("LeftButton")
@@ -1278,7 +1278,7 @@ function Portals:CreatePortalFrame()
     self.VesperPortalsUI:SetScript("OnDragStop", function(frame)
         frame:StopMovingOrSizing()
         local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
-        VesperGuild.db.profile.portalsPosition = {
+        vesperTools.db.profile.portalsPosition = {
             point = point,
             relativePoint = relativePoint,
             xOfs = xOfs,
@@ -1292,12 +1292,12 @@ function Portals:CreatePortalFrame()
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    self.VesperPortalsUI:SetBackdropColor(0.07, 0.07, 0.07, VesperGuild:GetConfiguredOpacity("portals")) -- #121212
+    self.VesperPortalsUI:SetBackdropColor(0.07, 0.07, 0.07, vesperTools:GetConfiguredOpacity("portals")) -- #121212
     self.VesperPortalsUI:SetBackdropBorderColor(classColor.r, classColor.g, classColor.b, 1)
 
-    local DataHandle = VesperGuild:GetModule("DataHandle", true)
+    local DataHandle = vesperTools:GetModule("DataHandle", true)
     if not DataHandle then
-        VesperGuild:Print(L["PORTALS_DATAHANDLE_MODULE_NOT_FOUND"])
+        vesperTools:Print(L["PORTALS_DATAHANDLE_MODULE_NOT_FOUND"])
         return
     end
 
@@ -1394,17 +1394,17 @@ function Portals:CreatePortalFrame()
 end
 
 function Portals:CreateVaultFrame()
-    self.vaultFrame = CreateFrame("Frame", "VesperGuildVaultFrame", self.VesperPortalsUI, "BackdropTemplate")
+    self.vaultFrame = CreateFrame("Frame", "vesperToolsVaultFrame", self.VesperPortalsUI, "BackdropTemplate")
     self.vaultFrame:SetSize(72, 72)
     self.vaultFrame:SetPoint("TOP", self.VesperPortalsUI, "BOTTOM", 0, -10)
-    VesperGuild:ApplyAddonWindowLayer(self.vaultFrame)
+    vesperTools:ApplyAddonWindowLayer(self.vaultFrame)
 
     self.vaultFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    self.vaultFrame:SetBackdropColor(0.07, 0.07, 0.07, VesperGuild:GetConfiguredOpacity("portals"))
+    self.vaultFrame:SetBackdropColor(0.07, 0.07, 0.07, vesperTools:GetConfiguredOpacity("portals"))
     self.vaultFrame:SetBackdropBorderColor(self.classColor.r, self.classColor.g, self.classColor.b, 1)
 
     local btn = CreateFrame("Button", nil, self.vaultFrame)
@@ -1438,7 +1438,7 @@ end
 
 function Portals:CreateMPlusProgFrame(curSeason)
     -- Typography for the Best Keys panel is independently configurable.
-    local bestKeysFontSize = VesperGuild:GetConfiguredFontSize("bestKeys", 11, 8, 24)
+    local bestKeysFontSize = vesperTools:GetConfiguredFontSize("bestKeys", 11, 8, 24)
 
     local rowHeight = 18
     local headerHeight = 22
@@ -1451,7 +1451,7 @@ function Portals:CreateMPlusProgFrame(curSeason)
 
     -- Measure widest dungeon name to size frame dynamically
     local measure = UIParent:CreateFontString(nil, "OVERLAY")
-    VesperGuild:ApplyConfiguredFont(measure, bestKeysFontSize, "")
+    vesperTools:ApplyConfiguredFont(measure, bestKeysFontSize, "")
     local maxNameWidth = 0
     for _, mapID in ipairs(curSeason) do
         local dungName = C_ChallengeMode.GetMapUIInfo(mapID) or L["UNKNOWN_DUNGEON"]
@@ -1463,17 +1463,17 @@ function Portals:CreateMPlusProgFrame(curSeason)
 
     local frameWidth = math.ceil(maxNameWidth) + bestColWidth + timeColWidth + (gap * 2) + (padding * 2)
 
-    self.mplusProgFrame = CreateFrame("Frame", "VesperGuildMPlusProgFrame", self.VesperPortalsUI, "BackdropTemplate")
+    self.mplusProgFrame = CreateFrame("Frame", "vesperToolsMPlusProgFrame", self.VesperPortalsUI, "BackdropTemplate")
     self.mplusProgFrame:SetSize(frameWidth, frameHeight)
     self.mplusProgFrame:SetPoint("LEFT", self.VesperPortalsUI, "RIGHT", 10, 0)
-    VesperGuild:ApplyAddonWindowLayer(self.mplusProgFrame)
+    vesperTools:ApplyAddonWindowLayer(self.mplusProgFrame)
 
     self.mplusProgFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    self.mplusProgFrame:SetBackdropColor(0.07, 0.07, 0.07, VesperGuild:GetConfiguredOpacity("bestKeys"))
+    self.mplusProgFrame:SetBackdropColor(0.07, 0.07, 0.07, vesperTools:GetConfiguredOpacity("bestKeys"))
     self.mplusProgFrame:SetBackdropBorderColor(self.classColor.r, self.classColor.g, self.classColor.b, 1)
 
     local timeColRight = -padding
@@ -1481,17 +1481,17 @@ function Portals:CreateMPlusProgFrame(curSeason)
 
     -- Header
     local nameHeader = self.mplusProgFrame:CreateFontString(nil, "OVERLAY")
-    VesperGuild:ApplyConfiguredFont(nameHeader, bestKeysFontSize, "")
+    vesperTools:ApplyConfiguredFont(nameHeader, bestKeysFontSize, "")
     nameHeader:SetPoint("TOPLEFT", padding, -padding)
     nameHeader:SetText("|cffFFFFFF" .. L["BEST_KEYS_HEADER_DUNGEON"] .. "|r")
 
     local keyHeader = self.mplusProgFrame:CreateFontString(nil, "OVERLAY")
-    VesperGuild:ApplyConfiguredFont(keyHeader, bestKeysFontSize, "")
+    vesperTools:ApplyConfiguredFont(keyHeader, bestKeysFontSize, "")
     keyHeader:SetPoint("TOPRIGHT", bestColRight, -padding)
     keyHeader:SetText("|cffFFFFFF" .. L["BEST_KEYS_HEADER_BEST"] .. "|r")
 
     local timeHeader = self.mplusProgFrame:CreateFontString(nil, "OVERLAY")
-    VesperGuild:ApplyConfiguredFont(timeHeader, bestKeysFontSize, "")
+    vesperTools:ApplyConfiguredFont(timeHeader, bestKeysFontSize, "")
     timeHeader:SetPoint("TOPRIGHT", timeColRight, -padding)
     timeHeader:SetText("|cffFFFFFF" .. L["BEST_KEYS_HEADER_TIME"] .. "|r")
 
@@ -1512,7 +1512,7 @@ function Portals:CreateMPlusProgFrame(curSeason)
         -- Dungeon name
         local dungName = C_ChallengeMode.GetMapUIInfo(mapID) or L["UNKNOWN_DUNGEON"]
         local nameText = self.mplusProgFrame:CreateFontString(nil, "OVERLAY")
-        VesperGuild:ApplyConfiguredFont(nameText, bestKeysFontSize, "")
+        vesperTools:ApplyConfiguredFont(nameText, bestKeysFontSize, "")
         nameText:SetPoint("LEFT", self.mplusProgFrame, "TOPLEFT", padding, rowCenter)
         nameText:SetJustifyH("LEFT")
         nameText:SetText(dungName)
@@ -1535,17 +1535,17 @@ function Portals:CreateMPlusProgFrame(curSeason)
         end
 
         local levelText = self.mplusProgFrame:CreateFontString(nil, "OVERLAY")
-        VesperGuild:ApplyConfiguredFont(levelText, bestKeysFontSize, "")
+        vesperTools:ApplyConfiguredFont(levelText, bestKeysFontSize, "")
         levelText:SetPoint("RIGHT", self.mplusProgFrame, "TOPRIGHT", bestColRight, rowCenter)
         levelText:SetJustifyH("RIGHT")
 
         local timeText = self.mplusProgFrame:CreateFontString(nil, "OVERLAY")
-        VesperGuild:ApplyConfiguredFont(timeText, bestKeysFontSize, "")
+        vesperTools:ApplyConfiguredFont(timeText, bestKeysFontSize, "")
         timeText:SetPoint("RIGHT", self.mplusProgFrame, "TOPRIGHT", timeColRight, rowCenter)
         timeText:SetJustifyH("RIGHT")
 
         if bestLevel > 0 then
-            local DataHandle = VesperGuild:GetModule("DataHandle", true)
+            local DataHandle = vesperTools:GetModule("DataHandle", true)
             local color = DataHandle and DataHandle:GetKeyColor(bestLevel) or "|cff9d9d9d"
             levelText:SetText(color .. "+" .. bestLevel .. "|r")
 
@@ -1567,12 +1567,12 @@ end
 function Portals:Toggle()
     if InCombatLockdown() then
         -- Portal buttons use secure attributes; prevent show/hide rebuilds in combat lockdown.
-        VesperGuild:Print(L["PORTALS_TOGGLE_IN_COMBAT"])
+        vesperTools:Print(L["PORTALS_TOGGLE_IN_COMBAT"])
         return
     end
 
     if not self.VesperPortalsUI then
-        VesperGuild:Print(L["PORTALS_UI_NOT_INITIALIZED"])
+        vesperTools:Print(L["PORTALS_UI_NOT_INITIALIZED"])
         return
     end
 

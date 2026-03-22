@@ -1,7 +1,7 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local KeystoneSync = VesperGuild:NewModule("KeystoneSync", "AceEvent-3.0", "AceTimer-3.0")
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local KeystoneSync = vesperTools:NewModule("KeystoneSync", "AceEvent-3.0", "AceTimer-3.0")
 local LibKeystone = LibStub("LibKeystone")
-local L = VesperGuild.L
+local L = vesperTools.L
 
 -- KeystoneSync responsibilities:
 -- 1) Receive guild keystone payloads from LibKeystone.
@@ -35,16 +35,16 @@ function KeystoneSync:OnEnable()
 end
 
 function KeystoneSync:DebugDumpKeystones()
-    if not VesperGuild.db.global.keystones then
-        VesperGuild:Print(L["KEYSTONE_DATABASE_EMPTY"])
+    if not vesperTools.db.global.keystones then
+        vesperTools:Print(L["KEYSTONE_DATABASE_EMPTY"])
         return
     end
 
-    VesperGuild:Print(L["KEYSTONE_DATABASE_HEADER"])
+    vesperTools:Print(L["KEYSTONE_DATABASE_HEADER"])
     local count = 0
-    for playerName, data in pairs(VesperGuild.db.global.keystones) do
+    for playerName, data in pairs(vesperTools.db.global.keystones) do
         local ratingText = data.rating and string.format(L["KEYSTONE_RATING_FMT"], data.rating) or ""
-        VesperGuild:Print(string.format(L["KEYSTONE_DATABASE_ENTRY_FMT"],
+        vesperTools:Print(string.format(L["KEYSTONE_DATABASE_ENTRY_FMT"],
             playerName,
             self:GetDungeonAbbrev(data.mapID),
             data.level,
@@ -52,7 +52,7 @@ function KeystoneSync:DebugDumpKeystones()
             time() - data.timestamp))
         count = count + 1
     end
-    VesperGuild:Print(string.format(L["KEYSTONE_DATABASE_TOTAL_FMT"], count))
+    vesperTools:Print(string.format(L["KEYSTONE_DATABASE_TOTAL_FMT"], count))
 end
 
 function KeystoneSync:OnDisable()
@@ -85,18 +85,18 @@ function KeystoneSync:OnLibKeystoneReceived(keyLevel, keyChallengeMapID, playerR
     end
 
     -- Notify UI listeners to repaint displayed key info.
-    VesperGuild:SendMessage("VESPERGUILD_KEYSTONE_UPDATE", sender)
+    vesperTools:SendMessage("VESPERTOOLS_KEYSTONE_UPDATE", sender)
 end
 
 -- Request keystones from guild using LibKeystone
 function KeystoneSync:RequestGuildKeystones()
     if not LibKeystone then
-        VesperGuild:Print(L["LIBKEYSTONE_NOT_LOADED"])
+        vesperTools:Print(L["LIBKEYSTONE_NOT_LOADED"])
         return false
     end
 
     if not IsInGuild() then
-        VesperGuild:Print(L["PLAYER_NOT_IN_GUILD"])
+        vesperTools:Print(L["PLAYER_NOT_IN_GUILD"])
         return false
     end
 
@@ -104,20 +104,20 @@ function KeystoneSync:RequestGuildKeystones()
     -- This will trigger all guild members running LibKeystone to respond with their keystone data
     LibKeystone.Request("GUILD")
 
-    VesperGuild:Print(L["REQUESTING_KEYSTONES"])
+    vesperTools:Print(L["REQUESTING_KEYSTONES"])
     return true
 end
 
 function KeystoneSync:StoreKeystone(playerName, mapID, level, rating)
-    if not VesperGuild.db.global.keystones then
-        VesperGuild.db.global.keystones = {}
+    if not vesperTools.db.global.keystones then
+        vesperTools.db.global.keystones = {}
     end
 
     if mapID == 0 or level == 0 then
         -- Remove entry so callers can treat missing row as "no key".
-        VesperGuild.db.global.keystones[playerName] = nil
+        vesperTools.db.global.keystones[playerName] = nil
     else
-        VesperGuild.db.global.keystones[playerName] = {
+        vesperTools.db.global.keystones[playerName] = {
             mapID = mapID,
             level = level,
             rating = rating or 0,  -- Store M+ rating, default to 0 if not provided
@@ -127,24 +127,24 @@ function KeystoneSync:StoreKeystone(playerName, mapID, level, rating)
 end
 
 function KeystoneSync:GetKeystoneForPlayer(playerName)
-    if not VesperGuild.db.global.keystones then
+    if not vesperTools.db.global.keystones then
         return nil
     end
     
-    local data = VesperGuild.db.global.keystones[playerName]
+    local data = vesperTools.db.global.keystones[playerName]
     if not data then
         return nil
     end
     
     -- Hard-expire entries older than 48h to avoid showing dead data.
     if not data.timestamp then
-        VesperGuild.db.global.keystones[playerName] = nil
+        vesperTools.db.global.keystones[playerName] = nil
         return nil
     end
 
     local age = time() - data.timestamp
     if age > (48 * 3600) then
-        VesperGuild.db.global.keystones[playerName] = nil
+        vesperTools.db.global.keystones[playerName] = nil
         return nil
     end
     
@@ -182,7 +182,7 @@ function KeystoneSync:GetDungeonAbbrev(mapID)
 end
 
 function KeystoneSync:CleanupStaleEntries()
-    if not VesperGuild.db.global.keystones then
+    if not vesperTools.db.global.keystones then
         return
     end
     
@@ -190,14 +190,14 @@ function KeystoneSync:CleanupStaleEntries()
     local removed = 0
     
     -- In-place cleanup keeps saved data lean and avoids stale roster rows.
-    for playerName, data in pairs(VesperGuild.db.global.keystones) do
+    for playerName, data in pairs(vesperTools.db.global.keystones) do
         if not data.timestamp or (now - data.timestamp) > (48 * 3600) then
-            VesperGuild.db.global.keystones[playerName] = nil
+            vesperTools.db.global.keystones[playerName] = nil
             removed = removed + 1
         end
     end
     
     if removed > 0 then
-        VesperGuild:Print(string.format(L["CLEANED_STALE_KEYSTONE_ENTRIES_FMT"], removed))
+        vesperTools:Print(string.format(L["CLEANED_STALE_KEYSTONE_ENTRIES_FMT"], removed))
     end
 end

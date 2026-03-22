@@ -9,8 +9,8 @@ if not L then
     return
 end
 
-L["ADDON_LOADED_MESSAGE"] = "VesperGuild加载成功！"
-L["SLASH_COMMAND_HELP"] = "打开VesperGuild窗口"
+L["ADDON_LOADED_MESSAGE"] = "vesperTools加载成功！"
+L["SLASH_COMMAND_HELP"] = "打开vesperTools窗口"
 
 local defaults = addonTable and addonTable.LocaleDefaults or nil
 if defaults then

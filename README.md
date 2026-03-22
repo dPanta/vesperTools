@@ -1,4 +1,4 @@
-# VesperGuildRoster
+# vesperTools
 Simple addon to manage your guild m+ runs.
 
 # Features
@@ -53,4 +53,4 @@ Learned a lot from the library structure.
 Inspiration for the teleport buttons and how to style/sort them, how to pull data from wowAPI.
 
 ## Download
-[https://www.curseforge.com/wow/addons/vesperguildroster]
+Update this section with the CurseForge project URL once the published addon slug is renamed to match `vesperTools`.

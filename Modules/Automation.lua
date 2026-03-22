@@ -1,6 +1,6 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local Automation = VesperGuild:NewModule("Automation", "AceConsole-3.0", "AceEvent-3.0", "AceComm-3.0")
-local L = VesperGuild.L
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local Automation = vesperTools:NewModule("Automation", "AceConsole-3.0", "AceEvent-3.0", "AceComm-3.0")
+local L = vesperTools.L
 
 -- Automation module responsibilities:
 -- 1) Guild-wide ilvl + best-key broadcasts (AceComm).
@@ -30,7 +30,7 @@ function Automation:OnEnable()
     self:RegisterComm(BESTKEYS_REQ_PREFIX, "OnBestKeysRequested")
 
     -- Use "addon opened" as a practical sync moment when the user expects fresh data.
-    self:RegisterMessage("VESPERGUILD_ADDON_OPENED", "OnAddonOpened")
+    self:RegisterMessage("VESPERTOOLS_ADDON_OPENED", "OnAddonOpened")
 
     -- Listen for M+ completion
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnMPlusCompleted")
@@ -41,7 +41,7 @@ function Automation:OnEnable()
     self:RegisterChatCommand("vespertest", "TestKeyReminder")
 
     -- Trim stale SavedVariables entries at startup to keep roster data relevant.
-    local DataHandle = VesperGuild:GetModule("DataHandle", true)
+    local DataHandle = vesperTools:GetModule("DataHandle", true)
     if DataHandle then
         DataHandle:CleanupStaleIlvl()
         DataHandle:CleanupStaleBestKeys()
@@ -101,10 +101,10 @@ function Automation:OnIlvlReceived(prefix, message, distribution, sender)
 
     if not ilvl then return end
 
-    local DataHandle = VesperGuild:GetModule("DataHandle", true)
+    local DataHandle = vesperTools:GetModule("DataHandle", true)
     if DataHandle then
         DataHandle:StoreIlvl(sender, ilvl, classID)
-        VesperGuild:SendMessage("VESPERGUILD_ILVL_UPDATE", sender)
+        vesperTools:SendMessage("VESPERTOOLS_ILVL_UPDATE", sender)
     end
 end
 
@@ -147,7 +147,7 @@ function Automation:BroadcastBestKeys()
     -- Persist own data immediately (guild echo is not guaranteed/timely).
     cachedRealmName = cachedRealmName or GetNormalizedRealmName()
     local playerName = UnitName("player") .. "-" .. cachedRealmName
-    local DataHandle = VesperGuild:GetModule("DataHandle", true)
+    local DataHandle = vesperTools:GetModule("DataHandle", true)
     if DataHandle then
         DataHandle:StoreBestKeys(playerName, localBestKeys, classID)
     end
@@ -184,10 +184,10 @@ function Automation:OnBestKeysReceived(prefix, message, distribution, sender)
         end
     end
 
-    local DataHandle = VesperGuild:GetModule("DataHandle", true)
+    local DataHandle = vesperTools:GetModule("DataHandle", true)
     if DataHandle then
         DataHandle:StoreBestKeys(sender, bestKeys, classID)
-        VesperGuild:SendMessage("VESPERGUILD_BESTKEYS_UPDATE", sender)
+        vesperTools:SendMessage("VESPERTOOLS_BESTKEYS_UPDATE", sender)
     end
 end
 
@@ -276,7 +276,7 @@ function Automation:ShowKeyReminder()
         f:SetFrameStrata("FULLSCREEN_DIALOG")
 
         local text = f:CreateFontString(nil, "OVERLAY")
-        text:SetFont("Interface\\AddOns\\VesperGuild\\Media\\Expressway.ttf", 60, "OUTLINE")
+        text:SetFont("Interface\\AddOns\\vesperTools\\Media\\expressway.ttf", 60, "OUTLINE")
         text:SetPoint("CENTER", 0, 200)
         text:SetText("|cffFFFF00" .. L["KEY_REMINDER_TEXT"] .. "|r")
         f.text = text
@@ -302,5 +302,5 @@ function Automation:ManualSync()
     self:BroadcastIlvl()
     self:BroadcastBestKeys()
     self:RequestBestKeys()
-    VesperGuild:Print(L["SYNC_BROADCASTED_MESSAGE"])
+    vesperTools:Print(L["SYNC_BROADCASTED_MESSAGE"])
 end

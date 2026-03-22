@@ -1,5 +1,5 @@
 <Bindings>
-    <Binding name="VESPERGUILD_TOGGLEBAGS" category="VesperGuild">
-        VesperGuild_ToggleBags()
+    <Binding name="VESPERTOOLS_TOGGLEBAGS" category="vesperTools">
+        vesperTools_ToggleBags()
     </Binding>
 </Bindings>

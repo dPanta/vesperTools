@@ -1,5 +1,5 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local DataHandle = VesperGuild:NewModule("DataHandle")
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local DataHandle = vesperTools:NewModule("DataHandle")
 
 -- DataHandle responsibilities:
 -- 1) Static dungeon metadata lookup (mapID -> portal spell/name).
@@ -167,15 +167,15 @@ end
 
 -- ilvl Sync DB accessors (persistent via AceDB global)
 function DataHandle:GetIlvlDB()
-    return VesperGuild.db.global.ilvlSync
+    return vesperTools.db.global.ilvlSync
 end
 
 function DataHandle:StoreIlvl(playerName, ilvl, classID)
-    if not VesperGuild.db.global.ilvlSync then
-        VesperGuild.db.global.ilvlSync = {}
+    if not vesperTools.db.global.ilvlSync then
+        vesperTools.db.global.ilvlSync = {}
     end
     -- Timestamp supports stale-data cleanup and optional freshness UI.
-    VesperGuild.db.global.ilvlSync[playerName] = {
+    vesperTools.db.global.ilvlSync[playerName] = {
         ilvl = ilvl,
         classID = classID,
         timestamp = time(),
@@ -183,7 +183,7 @@ function DataHandle:StoreIlvl(playerName, ilvl, classID)
 end
 
 function DataHandle:GetIlvlForPlayer(playerName)
-    local db = VesperGuild.db.global.ilvlSync
+    local db = vesperTools.db.global.ilvlSync
     if not db or not db[playerName] then
         return nil
     end
@@ -191,7 +191,7 @@ function DataHandle:GetIlvlForPlayer(playerName)
 end
 
 function DataHandle:CleanupStaleIlvl(maxAge)
-    local db = VesperGuild.db.global.ilvlSync
+    local db = vesperTools.db.global.ilvlSync
     if not db then return end
     maxAge = maxAge or (7 * 24 * 3600) -- default 7 days
     local now = time()
@@ -205,21 +205,21 @@ end
 
 -- Best Keys Sync DB accessors (persistent via AceDB global)
 function DataHandle:GetBestKeysDB()
-    return VesperGuild.db.global.bestKeys
+    return vesperTools.db.global.bestKeys
 end
 
 function DataHandle:StoreBestKeys(playerName, bestKeysData, classID)
-    if not VesperGuild.db.global.bestKeys then
-        VesperGuild.db.global.bestKeys = {}
+    if not vesperTools.db.global.bestKeys then
+        vesperTools.db.global.bestKeys = {}
     end
     -- Store metadata on the same object to simplify downstream display logic.
     bestKeysData.timestamp = time()
     bestKeysData.classID = classID
-    VesperGuild.db.global.bestKeys[playerName] = bestKeysData
+    vesperTools.db.global.bestKeys[playerName] = bestKeysData
 end
 
 function DataHandle:GetBestKeysForPlayer(playerName)
-    local db = VesperGuild.db.global.bestKeys
+    local db = vesperTools.db.global.bestKeys
     if not db or not db[playerName] then
         return nil
     end
@@ -227,7 +227,7 @@ function DataHandle:GetBestKeysForPlayer(playerName)
 end
 
 function DataHandle:CleanupStaleBestKeys(maxAge)
-    local db = VesperGuild.db.global.bestKeys
+    local db = vesperTools.db.global.bestKeys
     if not db then return end
     maxAge = maxAge or (7 * 24 * 3600) -- default 7 days
     local now = time()

@@ -1,6 +1,6 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local BagsWindow = VesperGuild:NewModule("BagsWindow", "AceEvent-3.0")
-local L = VesperGuild.L
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local BagsWindow = vesperTools:NewModule("BagsWindow", "AceEvent-3.0")
+local L = vesperTools.L
 local ITEM_CLASS = Enum and Enum.ItemClass or {}
 
 local MIN_WINDOW_WIDTH = 480
@@ -26,7 +26,7 @@ local HEADER_ACTION_BUTTON_GAP = 6
 local TITLEBAR_SEARCH_WIDTH = 220
 local TITLEBAR_SEARCH_HEIGHT = 22
 local TITLEBAR_SEARCH_CLEAR_BUTTON_SIZE = 14
-local CHARACTER_DROPDOWN_ARROW_TEXTURE = "Interface\\AddOns\\VesperGuild\\Media\\DropdownArrow-50"
+local CHARACTER_DROPDOWN_ARROW_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\DropdownArrow-50"
 local EQUIPPED_BAG_IDS = {}
 local REAGENT_BAG_ID = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or nil
 
@@ -131,14 +131,14 @@ function BagsWindow:OnInitialize()
 end
 
 function BagsWindow:OnEnable()
-    self:RegisterMessage("VESPERGUILD_BAGS_SNAPSHOT_UPDATED", "OnBagDataChanged")
-    self:RegisterMessage("VESPERGUILD_BAGS_CHARACTER_UPDATED", "OnBagDataChanged")
-    self:RegisterMessage("VESPERGUILD_BAGS_INDEX_UPDATED", "OnBagDataChanged")
-    self:RegisterMessage("VESPERGUILD_CONFIG_CHANGED", "OnConfigChanged")
+    self:RegisterMessage("VESPERTOOLS_BAGS_SNAPSHOT_UPDATED", "OnBagDataChanged")
+    self:RegisterMessage("VESPERTOOLS_BAGS_CHARACTER_UPDATED", "OnBagDataChanged")
+    self:RegisterMessage("VESPERTOOLS_BAGS_INDEX_UPDATED", "OnBagDataChanged")
+    self:RegisterMessage("VESPERTOOLS_CONFIG_CHANGED", "OnConfigChanged")
 end
 
 function BagsWindow:GetStore()
-    return VesperGuild:GetModule("BagsStore", true)
+    return vesperTools:GetModule("BagsStore", true)
 end
 
 function BagsWindow:OnBagDataChanged()
@@ -166,13 +166,13 @@ function BagsWindow:CleanupLegacyScrollArtifacts()
         self.scrollBar = nil
     end
 
-    local legacyFrame = _G["VesperGuildBagsWindowScrollFrame"]
+    local legacyFrame = _G["vesperToolsBagsWindowScrollFrame"]
     if legacyFrame then
         legacyFrame:Hide()
         legacyFrame:SetParent(nil)
     end
 
-    local legacyBar = _G["VesperGuildBagsWindowScrollFrameScrollBar"] or _G["VesperGuildBagsWindowScrollBar"]
+    local legacyBar = _G["vesperToolsBagsWindowScrollFrameScrollBar"] or _G["vesperToolsBagsWindowScrollBar"]
     if legacyBar then
         legacyBar:Hide()
         legacyBar:SetParent(nil)
@@ -217,7 +217,7 @@ function BagsWindow:SelectCurrentCharacterForOpen()
 
     self.selectedCharacterKey = currentCharacterKey
 
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if bagsProfile then
         bagsProfile.lastViewedCharacterGUID = currentCharacterKey
     end
@@ -238,7 +238,7 @@ function BagsWindow:ResolveSelectedCharacter()
         return nil
     end
 
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     local selectedKey = self.selectedCharacterKey or (bagsProfile and bagsProfile.lastViewedCharacterGUID) or nil
     for i = 1, #self.displayCharacters do
         if self.displayCharacters[i].key == selectedKey then
@@ -289,7 +289,7 @@ function BagsWindow:SetSelectedCharacter(characterKey)
 
     self:HideBagSlotsMenu()
     self.selectedCharacterKey = characterKey
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if bagsProfile then
         bagsProfile.lastViewedCharacterGUID = characterKey
     end
@@ -396,7 +396,7 @@ function BagsWindow:AcquireCharacterMenuButton(menu)
     text:SetJustifyH("LEFT")
     text:SetJustifyV("MIDDLE")
     text:SetWordWrap(false)
-    VesperGuild:ApplyConfiguredFont(text, 12, "")
+    vesperTools:ApplyConfiguredFont(text, 12, "")
     button.text = text
 
     button:SetScript("OnClick", function(selfButton)
@@ -488,7 +488,7 @@ function BagsWindow:AcquireBagSlotsMenuButton(menu)
 
     local count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     count:SetPoint("BOTTOMRIGHT", -2, 2)
-    VesperGuild:ApplyConfiguredFont(count, 11, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(count, 11, "OUTLINE")
     button.count = count
 
     self.bagSlotsMenuButtons[index] = button
@@ -573,7 +573,7 @@ function BagsWindow:SaveWindowState()
         return
     end
 
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if not bagsProfile then
         return
     end
@@ -588,7 +588,7 @@ function BagsWindow:SaveWindowState()
 end
 
 function BagsWindow:GetCollapsedCategoryTable(characterKey, create)
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if not bagsProfile or type(characterKey) ~= "string" or characterKey == "" then
         return nil
     end
@@ -626,7 +626,7 @@ function BagsWindow:SetCategoryCollapsed(characterKey, categoryKey, isCollapsed)
         return
     end
 
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if bagsProfile and bagsProfile.collapsedCategories then
         bagsProfile.collapsedCategories[characterKey] = nil
     end
@@ -638,7 +638,7 @@ function BagsWindow:ToggleCategoryCollapsed(characterKey, categoryKey)
 end
 
 function BagsWindow:GetViewSettings()
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     local display = bagsProfile and bagsProfile.display or nil
     local itemIconSize = math.max(24, math.min(56, math.floor((display and tonumber(display.itemIconSize) or DEFAULT_BUTTON_SIZE) + 0.5)))
     local columns = math.max(1, math.min(20, math.floor((display and tonumber(display.columns) or 10) + 0.5)))
@@ -667,7 +667,7 @@ function BagsWindow:ToggleBagSlots()
 end
 
 function BagsWindow:ToggleCombineStacks()
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     if not bagsProfile then
         return
     end
@@ -958,13 +958,13 @@ function BagsWindow:BuildDisplayItems(items, viewSettings)
 end
 
 function BagsWindow:CreateWindow()
-    local bagsProfile = VesperGuild:GetBagsProfile()
+    local bagsProfile = vesperTools:GetBagsProfile()
     local width = bagsProfile and bagsProfile.window.width or 900
     local height = bagsProfile and bagsProfile.window.height or 560
 
-    local frame = CreateFrame("Frame", "VesperGuildBagsWindow", UIParent, "BackdropTemplate")
+    local frame = CreateFrame("Frame", "vesperToolsBagsWindow", UIParent, "BackdropTemplate")
     frame:SetSize(width, height)
-    VesperGuild:ApplyAddonWindowLayer(frame)
+    vesperTools:ApplyAddonWindowLayer(frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:SetResizable(false)
@@ -1013,12 +1013,12 @@ function BagsWindow:CreateWindow()
     local titleText = titlebar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     titleText:SetPoint("LEFT", 10, 0)
     titleText:SetText(L["BAGS_TITLE"])
-    VesperGuild:ApplyConfiguredFont(titleText, VesperGuild:GetConfiguredFontSize("roster", 12, 8, 24) + 4, "")
+    vesperTools:ApplyConfiguredFont(titleText, vesperTools:GetConfiguredFontSize("roster", 12, 8, 24) + 4, "")
     self.titleText = titleText
 
     local modeText = titlebar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     modeText:SetPoint("LEFT", titleText, "RIGHT", 10, 0)
-    VesperGuild:ApplyConfiguredFont(modeText, 12, "")
+    vesperTools:ApplyConfiguredFont(modeText, 12, "")
     self.modeText = modeText
 
     local searchBox = CreateFrame("EditBox", nil, titlebar, "BackdropTemplate")
@@ -1033,7 +1033,7 @@ function BagsWindow:CreateWindow()
     })
     searchBox:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
     searchBox:SetBackdropBorderColor(1, 1, 1, 0.12)
-    VesperGuild:ApplyConfiguredFont(searchBox, 12, "")
+    vesperTools:ApplyConfiguredFont(searchBox, 12, "")
     searchBox:SetScript("OnTextChanged", function(selfBox, userInput)
         self:UpdateSearchPlaceholder()
         if userInput then
@@ -1055,7 +1055,7 @@ function BagsWindow:CreateWindow()
     end)
     self.searchBox = searchBox
 
-    local searchClearButton = VesperGuild:CreateModernCloseButton(searchBox, function()
+    local searchClearButton = vesperTools:CreateModernCloseButton(searchBox, function()
         self:ClearSearch()
         searchBox:SetFocus()
     end, {
@@ -1078,10 +1078,10 @@ function BagsWindow:CreateWindow()
     searchPlaceholder:SetJustifyV("MIDDLE")
     searchPlaceholder:SetWordWrap(false)
     searchPlaceholder:SetText(L["BAGS_SEARCH_PLACEHOLDER"])
-    VesperGuild:ApplyConfiguredFont(searchPlaceholder, 12, "")
+    vesperTools:ApplyConfiguredFont(searchPlaceholder, 12, "")
     self.searchPlaceholder = searchPlaceholder
 
-    local closeButton = VesperGuild:CreateModernCloseButton(titlebar, function()
+    local closeButton = vesperTools:CreateModernCloseButton(titlebar, function()
         self:HideCharacterMenu()
         frame:Hide()
     end, {
@@ -1128,7 +1128,7 @@ function BagsWindow:CreateWindow()
     local bagSlotsButtonText = bagSlotsButton:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     bagSlotsButtonText:SetPoint("CENTER", 0, 0)
     bagSlotsButtonText:SetText(L["BAGS_BAG_SLOTS"])
-    VesperGuild:ApplyConfiguredFont(bagSlotsButtonText, 11, "")
+    vesperTools:ApplyConfiguredFont(bagSlotsButtonText, 11, "")
     self.bagSlotsButtonText = bagSlotsButtonText
 
     local cleanupButton = CreateFrame("Button", nil, navFrame, "BackdropTemplate")
@@ -1159,7 +1159,7 @@ function BagsWindow:CreateWindow()
     local cleanupButtonText = cleanupButton:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     cleanupButtonText:SetPoint("CENTER", 0, 0)
     cleanupButtonText:SetText(L["BAGS_CLEAR_NEW_ITEMS"])
-    VesperGuild:ApplyConfiguredFont(cleanupButtonText, 11, "")
+    vesperTools:ApplyConfiguredFont(cleanupButtonText, 11, "")
     self.cleanupButtonText = cleanupButtonText
 
     local combineStacksButton = CreateFrame("Button", nil, navFrame, "BackdropTemplate")
@@ -1180,7 +1180,7 @@ function BagsWindow:CreateWindow()
         self:ToggleCombineStacks()
     end)
     combineStacksButton:SetScript("OnEnter", function(selfButton)
-        local bagsProfile = VesperGuild:GetBagsProfile()
+        local bagsProfile = vesperTools:GetBagsProfile()
         local isActive = bagsProfile and bagsProfile.display and bagsProfile.display.combineStacks and true or false
         self:ConfigureCombineStacksButtonTooltip(selfButton, isActive)
     end)
@@ -1202,7 +1202,7 @@ function BagsWindow:CreateWindow()
     local combineStacksButtonText = combineStacksButton:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     combineStacksButtonText:SetPoint("CENTER", 0, 0)
     combineStacksButtonText:SetText(L["BAGS_COMBINE_BUTTON"])
-    VesperGuild:ApplyConfiguredFont(combineStacksButtonText, 11, "")
+    vesperTools:ApplyConfiguredFont(combineStacksButtonText, 11, "")
     self.combineStacksButtonText = combineStacksButtonText
 
     local characterDropdown = CreateFrame("Button", nil, navFrame, "BackdropTemplate")
@@ -1230,7 +1230,7 @@ function BagsWindow:CreateWindow()
     characterDropdownText:SetJustifyH("LEFT")
     characterDropdownText:SetJustifyV("MIDDLE")
     characterDropdownText:SetWordWrap(false)
-    VesperGuild:ApplyConfiguredFont(characterDropdownText, 12, "")
+    vesperTools:ApplyConfiguredFont(characterDropdownText, 12, "")
     self.characterDropdownText = characterDropdownText
 
     local characterDropdownArrow = characterDropdown:CreateTexture(nil, "ARTWORK")
@@ -1250,7 +1250,7 @@ function BagsWindow:CreateWindow()
     emptyText:SetWidth(math.max(620, width - 60))
     emptyText:SetJustifyH("LEFT")
     emptyText:SetText(L["BAGS_EMPTY"])
-    VesperGuild:ApplyConfiguredFont(emptyText, 12, "")
+    vesperTools:ApplyConfiguredFont(emptyText, 12, "")
     emptyText:Hide()
     self.emptyText = emptyText
 
@@ -1353,7 +1353,7 @@ function BagsWindow:AcquireSectionFrame()
     local title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 0, 0)
     title:SetJustifyH("LEFT")
-    VesperGuild:ApplyConfiguredFont(title, 14, "")
+    vesperTools:ApplyConfiguredFont(title, 14, "")
     section.title = title
 
     local divider = section:CreateTexture(nil, "BACKGROUND")
@@ -1422,13 +1422,13 @@ function BagsWindow:AcquireItemButton()
 
     local count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     count:SetPoint("BOTTOMRIGHT", -2, 2)
-    VesperGuild:ApplyConfiguredFont(count, 11, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(count, 11, "OUTLINE")
     button.count = count
 
     local itemLevel = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     itemLevel:SetPoint("TOPLEFT", 3, -2)
     itemLevel:SetJustifyH("LEFT")
-    VesperGuild:ApplyConfiguredFont(itemLevel, 9, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(itemLevel, 9, "OUTLINE")
     itemLevel:Hide()
     button.itemLevel = itemLevel
 
@@ -1457,7 +1457,7 @@ function BagsWindow:AcquireSummaryButton()
 
     local count = button:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     count:SetPoint("CENTER", 0, 0)
-    VesperGuild:ApplyConfiguredFont(count, 13, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(count, 13, "OUTLINE")
     button.count = count
 
     self.summaryButtons[#self.summaryButtons + 1] = button
@@ -1485,7 +1485,7 @@ function BagsWindow:AcquireEquippedBagButton()
 
     local count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     count:SetPoint("BOTTOMRIGHT", -2, 2)
-    VesperGuild:ApplyConfiguredFont(count, 11, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(count, 11, "OUTLINE")
     button.count = count
 
     self.equippedBagButtons[#self.equippedBagButtons + 1] = button
@@ -1602,7 +1602,7 @@ function BagsWindow:ConfigureEquippedBagButton(button, entry, viewSettings)
     local countFontSize = math.max(8, math.min(20, tonumber(viewSettings and viewSettings.stackCountFontSize) or 11))
 
     button:SetSize(itemIconSize, itemIconSize)
-    VesperGuild:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
     button.itemName = entry.name
     button.hyperlink = entry.hyperlink
     button.ownerName = entry.ownerName
@@ -1786,8 +1786,8 @@ function BagsWindow:ConfigureItemButton(button, record, isCurrentCharacter, owne
     local itemLevelFontSize = math.max(8, math.min(18, tonumber(viewSettings and viewSettings.itemLevelFontSize) or 9))
 
     button:SetSize(itemIconSize, itemIconSize)
-    VesperGuild:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
-    VesperGuild:ApplyConfiguredFont(button.itemLevel, itemLevelFontSize, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(button.itemLevel, itemLevelFontSize, "OUTLINE")
 
     button.icon:SetTexture(record.iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark")
     button.count:SetText(((button.isCombined and button.totalCount > 1) or (tonumber(record.stackCount) or 1) > 1) and tostring(button.totalCount) or "")
@@ -1866,7 +1866,7 @@ function BagsWindow:ConfigureSummaryButton(button, summaryEntry, viewSettings)
     button.icon:SetTexture(summaryEntry.iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark")
     button.count:SetText(tostring(button.summaryCount))
     button.count:SetTextColor(0.95, 0.95, 0.95, 1)
-    VesperGuild:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
+    vesperTools:ApplyConfiguredFont(button.count, countFontSize, "OUTLINE")
     button:SetScript("OnEnter", function(selfButton)
         self:ConfigureSummaryTooltip(selfButton)
     end)

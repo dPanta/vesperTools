@@ -1,6 +1,6 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local BankStore = VesperGuild:NewModule("BankStore", "AceEvent-3.0")
-local L = VesperGuild.L
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local BankStore = vesperTools:NewModule("BankStore", "AceEvent-3.0")
+local L = vesperTools.L
 
 local ITEM_CLASS = Enum and Enum.ItemClass or {}
 local BAG_CATEGORY_DEFS = {
@@ -233,7 +233,7 @@ function BankStore:OnEnable()
 end
 
 function BankStore:GetDB()
-    return VesperGuild:GetBagsDB()
+    return vesperTools:GetBagsDB()
 end
 
 function BankStore:GetGlobalDB()
@@ -263,7 +263,7 @@ function BankStore:GetBankRoot()
 end
 
 function BankStore:GetCurrentCharacterKey()
-    return VesperGuild:GetCurrentCharacterGUID()
+    return vesperTools:GetCurrentCharacterGUID()
 end
 
 function BankStore:GetCategoryDisplayName(categoryKey)
@@ -793,9 +793,9 @@ function BankStore:RefreshPendingFlag()
 end
 
 function BankStore:BroadcastBankChange()
-    VesperGuild:SendMessage("VESPERGUILD_BANK_SNAPSHOT_UPDATED")
-    VesperGuild:SendMessage("VESPERGUILD_BANK_CHARACTER_UPDATED")
-    VesperGuild:SendMessage("VESPERGUILD_WARBAND_BANK_UPDATED")
+    vesperTools:SendMessage("VESPERTOOLS_BANK_SNAPSHOT_UPDATED")
+    vesperTools:SendMessage("VESPERTOOLS_BANK_CHARACTER_UPDATED")
+    vesperTools:SendMessage("VESPERTOOLS_WARBAND_BANK_UPDATED")
 end
 
 function BankStore:DoFullCharacterBankRescan(character)

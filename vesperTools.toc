@@ -1,9 +1,10 @@
 ## Interface: 120000,120001
-## Title: VesperGuildRoster
+## Title: vesperTools
 ## Notes: Guild M+ helper.
 ## Author: dPanta
-## Version: 2.0.0
-## SavedVariables: VesperGuildDB, VesperGuildBagsDB
+## Version: 1.0.0
+## IconTexture: Interface\AddOns\vesperTools\Media\vesperTools.png
+## SavedVariables: vesperToolsDB, vesperToolsBagsDB, VesperGuildDB, VesperGuildBagsDB
 ## X-Wago-ID: XKqAw8Ky
 
 ## OptionalDeps: Ace3
@@ -35,7 +36,7 @@ Locales\zhCN.lua
 Locales\zhTW.lua
 
 # Core
-VesperGuild.lua
+vesperTools.lua
 
 # Modules
 Modules\DataHandle.lua

@@ -1,6 +1,6 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local BagsStore = VesperGuild:NewModule("BagsStore", "AceEvent-3.0")
-local L = VesperGuild.L
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local BagsStore = vesperTools:NewModule("BagsStore", "AceEvent-3.0")
+local L = vesperTools.L
 
 local ITEM_CLASS = Enum and Enum.ItemClass or {}
 local BAG_CATEGORY_DEFS = {
@@ -198,11 +198,11 @@ function BagsStore:OnEnable()
 end
 
 function BagsStore:GetDB()
-    return VesperGuild:GetBagsDB()
+    return vesperTools:GetBagsDB()
 end
 
 function BagsStore:GetProfile()
-    return VesperGuild:GetBagsProfile()
+    return vesperTools:GetBagsProfile()
 end
 
 function BagsStore:GetGlobalDB()
@@ -246,7 +246,7 @@ function BagsStore:GetCategoryOrder(categoryKey)
 end
 
 function BagsStore:GetCurrentCharacterKey()
-    return VesperGuild:GetCurrentCharacterGUID()
+    return vesperTools:GetCurrentCharacterGUID()
 end
 
 function BagsStore:CreateOrUpdateCurrentCharacter()
@@ -794,9 +794,9 @@ function BagsStore:ClearPendingState()
 end
 
 function BagsStore:BroadcastBagChange(characterKey)
-    VesperGuild:SendMessage("VESPERGUILD_BAGS_SNAPSHOT_UPDATED", characterKey)
-    VesperGuild:SendMessage("VESPERGUILD_BAGS_CHARACTER_UPDATED", characterKey)
-    VesperGuild:SendMessage("VESPERGUILD_BAGS_INDEX_UPDATED", characterKey)
+    vesperTools:SendMessage("VESPERTOOLS_BAGS_SNAPSHOT_UPDATED", characterKey)
+    vesperTools:SendMessage("VESPERTOOLS_BAGS_CHARACTER_UPDATED", characterKey)
+    vesperTools:SendMessage("VESPERTOOLS_BAGS_INDEX_UPDATED", characterKey)
 end
 
 function BagsStore:DoFullCarryRescan(characterKey, character)

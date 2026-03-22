@@ -1,6 +1,6 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local Configuration = VesperGuild:NewModule("Configuration")
-local L = VesperGuild.L
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local Configuration = vesperTools:NewModule("Configuration")
+local L = vesperTools.L
 
 -- Configuration module responsibilities:
 -- 1) Build and manage the custom config window.
@@ -45,7 +45,7 @@ local function setFontStringTextSafe(fontString, text, size, flags, fallbackObje
 
     local hasFont = fontString.GetFont and fontString:GetFont()
     if not hasFont then
-        local applied = VesperGuild:ApplyConfiguredFont(fontString, resolvedSize, resolvedFlags)
+        local applied = vesperTools:ApplyConfiguredFont(fontString, resolvedSize, resolvedFlags)
         if not applied then
             local fallback = fallbackObject or GameFontHighlightSmall or GameFontNormal or SystemFont_Shadow_Med1
             if fallback then
@@ -64,16 +64,16 @@ end
 -- Ensure the expected profile subtree exists before reading/writing config values.
 -- This keeps runtime code robust even when old SavedVariables are missing fields.
 local function ensureProfile()
-    if not VesperGuild.db then
+    if not vesperTools.db then
         return nil
     end
 
-    local profile = VesperGuild.db.profile or {}
-    VesperGuild.db.profile = profile
+    local profile = vesperTools.db.profile or {}
+    vesperTools.db.profile = profile
 
     profile.style = profile.style or {}
     if type(profile.style.fontPath) ~= "string" or profile.style.fontPath == "" then
-        profile.style.fontPath = VesperGuild:GetConfiguredFontPath()
+        profile.style.fontPath = vesperTools:GetConfiguredFontPath()
     end
 
     profile.style.backgroundOpacity = profile.style.backgroundOpacity or {}
@@ -96,7 +96,7 @@ local function ensureProfile()
 
     profile.portals = profile.portals or {}
     profile.portals.primaryHearthstoneItemID = tonumber(profile.portals.primaryHearthstoneItemID) or 6948
-    local minButtonSize, maxButtonSize, defaultButtonSize = VesperGuild:GetTopUtilityButtonSizeBounds()
+    local minButtonSize, maxButtonSize, defaultButtonSize = vesperTools:GetTopUtilityButtonSizeBounds()
     profile.portals.utilityButtonSize = clamp(
         math.floor((tonumber(profile.portals.utilityButtonSize) or defaultButtonSize) + 0.5),
         minButtonSize,
@@ -121,7 +121,7 @@ local function ensureProfile()
 end
 
 local function ensureBagsProfile()
-    return VesperGuild:GetBagsProfile()
+    return vesperTools:GetBagsProfile()
 end
 
 -- Module state bootstrap.
@@ -163,7 +163,7 @@ end
 
 -- Broadcast a single "config changed" message consumed by UI modules.
 function Configuration:NotifyConfigChanged()
-    VesperGuild:SendMessage("VESPERGUILD_CONFIG_CHANGED")
+    vesperTools:SendMessage("VESPERTOOLS_CONFIG_CHANGED")
 end
 
 -- Create a standardized opacity slider control for frame background alpha.
@@ -456,7 +456,7 @@ function Configuration:CreateFlatDropdown(name, parent, anchor, yOffset, width, 
     text:SetPoint("RIGHT", dropdown, "RIGHT", -24, 0)
     text:SetJustifyH("LEFT")
     text:SetJustifyV("MIDDLE")
-    VesperGuild:ApplyConfiguredFont(text, 12, "")
+    vesperTools:ApplyConfiguredFont(text, 12, "")
     dropdown.Text = text
 
     local arrow = dropdown:CreateTexture(nil, "ARTWORK")
@@ -480,7 +480,7 @@ function Configuration:GetContextMenuAnchor(anchorButton)
     end
 
     if not (self.contextMenuAnchor and self.contextMenuAnchor.GetName) then
-        self.contextMenuAnchor = CreateFrame("Frame", "VesperGuildConfigContextMenuAnchor", UIParent)
+        self.contextMenuAnchor = CreateFrame("Frame", "vesperToolsConfigContextMenuAnchor", UIParent)
         self.contextMenuAnchor:SetSize(2, 2)
         self.contextMenuAnchor:SetClampedToScreen(true)
     end
@@ -529,7 +529,7 @@ function Configuration:CreateFlatInput(name, parent, anchor, yOffset, width)
     input:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
     input:SetBackdropBorderColor(1, 1, 1, 0.12)
 
-    local applied = VesperGuild:ApplyConfiguredFont(input, 12, "")
+    local applied = vesperTools:ApplyConfiguredFont(input, 12, "")
     if not applied and ChatFontNormal then
         input:SetFontObject(ChatFontNormal)
     end
@@ -639,8 +639,8 @@ function Configuration:RefreshFontDropdownText()
         return
     end
 
-    local selectedPath = VesperGuild:GetConfiguredFontPath()
-    local label = VesperGuild:GetFontLabelByPath(selectedPath)
+    local selectedPath = vesperTools:GetConfiguredFontPath()
+    local label = vesperTools:GetFontLabelByPath(selectedPath)
     setFontStringTextSafe(self.fontDropdownText, label, 12, "", GameFontHighlightSmall)
 end
 
@@ -652,7 +652,7 @@ function Configuration:OpenFontPicker(anchorButton)
         return
     end
 
-    local options = VesperGuild:GetFontOptions()
+    local options = vesperTools:GetFontOptions()
     if type(options) ~= "table" or #options == 0 then
         return
     end
@@ -703,7 +703,7 @@ function Configuration:RefreshHearthstoneDropdownText()
         return
     end
 
-    local options = VesperGuild:GetPrimaryHearthstoneOptions()
+    local options = vesperTools:GetPrimaryHearthstoneOptions()
     if type(options) ~= "table" or #options == 0 then
         self.hearthstoneDropdown:Disable()
         self.hearthstoneDropdown:SetAlpha(0.55)
@@ -720,7 +720,7 @@ function Configuration:RefreshHearthstoneDropdownText()
     self.hearthstoneDropdown:Enable()
     self.hearthstoneDropdown:SetAlpha(1)
 
-    local selectedID = VesperGuild:ResolvePrimaryHearthstoneID()
+    local selectedID = vesperTools:ResolvePrimaryHearthstoneID()
     local selectedOption = nil
     for i = 1, #options do
         if options[i].itemID == selectedID then
@@ -747,7 +747,7 @@ function Configuration:RefreshToyWhitelistDropdownText()
         return
     end
 
-    local ownedToyOptions = VesperGuild:GetOwnedToyOptions()
+    local ownedToyOptions = vesperTools:GetOwnedToyOptions()
     local ownedCount = type(ownedToyOptions) == "table" and #ownedToyOptions or 0
     if ownedCount == 0 then
         self.toyWhitelistDropdown:Disable()
@@ -759,7 +759,7 @@ function Configuration:RefreshToyWhitelistDropdownText()
     self.toyWhitelistDropdown:Enable()
     self.toyWhitelistDropdown:SetAlpha(1)
 
-    local whitelist = VesperGuild:GetConfiguredToyWhitelist()
+    local whitelist = vesperTools:GetConfiguredToyWhitelist()
     local whitelistCount = #whitelist
     if whitelistCount == 0 then
         setFontStringTextSafe(self.toyWhitelistDropdownText, L["CONFIG_TOY_FLYOUT_WHITELIST_NONE"], 12, "", GameFontHighlightSmall)
@@ -783,7 +783,7 @@ function Configuration:OpenHearthstonePicker(anchorButton)
         return
     end
 
-    local options = VesperGuild:GetPrimaryHearthstoneOptions()
+    local options = vesperTools:GetPrimaryHearthstoneOptions()
     if type(options) ~= "table" or #options == 0 then
         return
     end
@@ -882,9 +882,9 @@ function Configuration:EnsureToyWhitelistMenuFrame(anchorButton)
     local visibleRows = TOY_MENU_MAX_VISIBLE_ROWS + 1
     local height = (visibleRows * TOY_MENU_ROW_HEIGHT) + 20
 
-    local menu = CreateFrame("Frame", "VesperGuildToyWhitelistMenu", UIParent, "BackdropTemplate")
+    local menu = CreateFrame("Frame", "vesperToolsToyWhitelistMenu", UIParent, "BackdropTemplate")
     menu:SetSize(width, height)
-    VesperGuild:ApplyAddonWindowLayer(menu, 80)
+    vesperTools:ApplyAddonWindowLayer(menu, 80)
     menu:SetClampedToScreen(true)
     menu:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -937,13 +937,13 @@ function Configuration:RefreshToyWhitelistMenu()
         return
     end
 
-    local ownedToyOptions = VesperGuild:GetOwnedToyOptions()
+    local ownedToyOptions = vesperTools:GetOwnedToyOptions()
     local hasOwnedToys = type(ownedToyOptions) == "table" and #ownedToyOptions > 0
 
     -- Sort list so whitelisted entries are always first, then alphabetically by name.
     local sortedOptions = {}
     local whitelistMap = {}
-    local whitelist = VesperGuild:GetConfiguredToyWhitelist()
+    local whitelist = vesperTools:GetConfiguredToyWhitelist()
     for i = 1, #whitelist do
         whitelistMap[whitelist[i]] = true
     end
@@ -1028,7 +1028,7 @@ function Configuration:RefreshToyWhitelistMenu()
                 row.Check:Hide()
             end
             row:SetScript("OnClick", function()
-                VesperGuild:SetToyWhitelisted(option.itemID, not isSelected)
+                vesperTools:SetToyWhitelisted(option.itemID, not isSelected)
                 self:RefreshControls()
                 self:NotifyConfigChanged()
                 self:RefreshToyWhitelistMenu()
@@ -1144,12 +1144,12 @@ function Configuration:AddToyToWhitelistByName()
             return
         end
 
-        if VesperGuild:IsToyWhitelisted(toyID) then
+        if vesperTools:IsToyWhitelisted(toyID) then
             self:SetToyLookupStatus(string.format(L["CONFIG_ALREADY_WHITELISTED_ITEM_FMT"], tostring(toyID)), 1, 0.7, 0.2)
             return
         end
 
-        VesperGuild:SetToyWhitelisted(toyID, true)
+        vesperTools:SetToyWhitelisted(toyID, true)
 
         local toyName = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(toyID))
             or GetItemInfo(toyID)
@@ -1161,7 +1161,7 @@ function Configuration:AddToyToWhitelistByName()
         return
     end
 
-    local ownedToyOptions = VesperGuild:GetOwnedToyOptions()
+    local ownedToyOptions = vesperTools:GetOwnedToyOptions()
     if #ownedToyOptions == 0 then
         self:SetToyLookupStatus(L["CONFIG_TOY_LIST_NOT_READY"], 1, 0.7, 0.2)
         return
@@ -1173,12 +1173,12 @@ function Configuration:AddToyToWhitelistByName()
         return
     end
 
-    if VesperGuild:IsToyWhitelisted(match.itemID) then
+    if vesperTools:IsToyWhitelisted(match.itemID) then
         self:SetToyLookupStatus(string.format(L["CONFIG_ALREADY_WHITELISTED_FMT"], match.name or L["TOY_FALLBACK"]), 1, 0.7, 0.2)
         return
     end
 
-    VesperGuild:SetToyWhitelisted(match.itemID, true)
+    vesperTools:SetToyWhitelisted(match.itemID, true)
     self:SetToyLookupStatus(string.format(L["CONFIG_ADDED_FMT"], match.name or L["TOY_FALLBACK"]), 0.5, 1, 0.5)
     self.toyNameInput:SetText(match.name or "")
     self:RefreshControls()
@@ -1192,10 +1192,10 @@ function Configuration:BuildPanel()
         return
     end
 
-    local panel = CreateFrame("Frame", "VesperGuildConfigWindow", UIParent, "BackdropTemplate")
+    local panel = CreateFrame("Frame", "vesperToolsConfigWindow", UIParent, "BackdropTemplate")
     panel:SetSize(WINDOW_WIDTH, WINDOW_HEIGHT)
     panel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-    VesperGuild:ApplyAddonWindowLayer(panel, 50)
+    vesperTools:ApplyAddonWindowLayer(panel, 50)
     panel:SetMovable(true)
     panel:EnableMouse(true)
     panel:SetClampedToScreen(true)
@@ -1250,7 +1250,7 @@ function Configuration:BuildPanel()
         panel:StopMovingOrSizing()
     end)
 
-    local closeButton = VesperGuild:CreateModernCloseButton(panel, function()
+    local closeButton = vesperTools:CreateModernCloseButton(panel, function()
         panel:Hide()
     end, {
         size = 22,
@@ -1265,7 +1265,7 @@ function Configuration:BuildPanel()
     -- Window headings.
     local title = panel:CreateFontString(nil, "ARTWORK")
     title:SetPoint("TOPLEFT", 16, -10)
-    setFontStringTextSafe(title, "VesperGuild", 24, "", GameFontHighlightLarge)
+    setFontStringTextSafe(title, "vesperTools", 24, "", GameFontHighlightLarge)
 
     local subtitle = panel:CreateFontString(nil, "ARTWORK")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
@@ -1277,7 +1277,7 @@ function Configuration:BuildPanel()
     setFontStringTextSafe(sharedLabel, L["CONFIG_SHARED_FONT_FAMILY"], 12, "OUTLINE", GameFontHighlight)
 
     local fontDropdown = self:CreateFlatDropdown(
-        "VesperGuildConfigFontDropdown",
+        "vesperToolsConfigFontDropdown",
         panel,
         sharedLabel,
         -6,
@@ -1327,14 +1327,14 @@ function Configuration:BuildPanel()
     setFontStringTextSafe(rosterSectionTitle, L["CONFIG_SECTION_ROSTER_FRAME"], 13, "OUTLINE", GameFontHighlight)
 
     local rosterFontSizeSlider = self:CreateFontSizeSlider(
-        "VesperGuildConfigRosterFontSizeSlider",
+        "vesperToolsConfigRosterFontSizeSlider",
         rosterTab,
         L["CONFIG_ROSTER_FONT_SIZE"],
         rosterSectionTitle,
         -16
     )
     local rosterOpacitySlider = self:CreateOpacitySlider(
-        "VesperGuildConfigRosterOpacitySlider",
+        "vesperToolsConfigRosterOpacitySlider",
         rosterTab,
         L["CONFIG_ROSTER_OPACITY"],
         rosterFontSizeSlider,
@@ -1346,22 +1346,22 @@ function Configuration:BuildPanel()
     setFontStringTextSafe(portalsSectionTitle, L["CONFIG_SECTION_PORTALS_FRAME"], 13, "OUTLINE", GameFontHighlight)
 
     local portalsFontSizeSlider = self:CreateFontSizeSlider(
-        "VesperGuildConfigPortalsFontSizeSlider",
+        "vesperToolsConfigPortalsFontSizeSlider",
         portalsTab,
         L["CONFIG_PORTALS_FONT_SIZE"],
         portalsSectionTitle,
         -16
     )
     local portalsOpacitySlider = self:CreateOpacitySlider(
-        "VesperGuildConfigPortalsOpacitySlider",
+        "vesperToolsConfigPortalsOpacitySlider",
         portalsTab,
         L["CONFIG_PORTALS_OPACITY"],
         portalsFontSizeSlider,
         -30
     )
-    local minUtilityButtonSize, maxUtilityButtonSize = VesperGuild:GetTopUtilityButtonSizeBounds()
+    local minUtilityButtonSize, maxUtilityButtonSize = vesperTools:GetTopUtilityButtonSizeBounds()
     local utilityButtonSizeSlider = self:CreateUtilityButtonSizeSlider(
-        "VesperGuildConfigTopUtilityButtonSizeSlider",
+        "vesperToolsConfigTopUtilityButtonSizeSlider",
         portalsTab,
         L["CONFIG_TOP_UTILITY_BUTTON_SIZE"],
         portalsOpacitySlider,
@@ -1375,7 +1375,7 @@ function Configuration:BuildPanel()
     setFontStringTextSafe(hearthstoneLabel, L["CONFIG_PRIMARY_HEARTHSTONE"], 12, "", GameFontNormal)
 
     local hearthstoneDropdown = self:CreateFlatDropdown(
-        "VesperGuildConfigPrimaryHearthstoneDropdown",
+        "vesperToolsConfigPrimaryHearthstoneDropdown",
         portalsTab,
         hearthstoneLabel,
         -6,
@@ -1391,7 +1391,7 @@ function Configuration:BuildPanel()
     setFontStringTextSafe(toyWhitelistLabel, L["CONFIG_TOY_FLYOUT_WHITELIST"], 12, "", GameFontNormal)
 
     local toyWhitelistDropdown = self:CreateFlatDropdown(
-        "VesperGuildConfigToyWhitelistDropdown",
+        "vesperToolsConfigToyWhitelistDropdown",
         portalsTab,
         toyWhitelistLabel,
         -6,
@@ -1407,7 +1407,7 @@ function Configuration:BuildPanel()
     setFontStringTextSafe(toyNameLabel, L["CONFIG_ADD_TOY_BY_NAME"], 12, "", GameFontNormal)
 
     local toyNameInput = self:CreateFlatInput(
-        "VesperGuildConfigToyNameInput",
+        "vesperToolsConfigToyNameInput",
         portalsTab,
         toyNameLabel,
         -6,
@@ -1419,7 +1419,7 @@ function Configuration:BuildPanel()
     end)
 
     local toyAddButton = self:CreateFlatActionButton(
-        "VesperGuildConfigToyNameAddButton",
+        "vesperToolsConfigToyNameAddButton",
         portalsTab,
         L["CONFIG_ADD_BUTTON"],
         toyNameInput,
@@ -1444,14 +1444,14 @@ function Configuration:BuildPanel()
     setFontStringTextSafe(bestKeysSectionTitle, L["CONFIG_SECTION_BEST_KEYS_FRAME"], 13, "OUTLINE", GameFontHighlight)
 
     local bestKeysFontSizeSlider = self:CreateFontSizeSlider(
-        "VesperGuildConfigBestKeysFontSizeSlider",
+        "vesperToolsConfigBestKeysFontSizeSlider",
         bestKeysTab,
         L["CONFIG_BEST_KEYS_FONT_SIZE"],
         bestKeysSectionTitle,
         -16
     )
     local bestKeysOpacitySlider = self:CreateOpacitySlider(
-        "VesperGuildConfigBestKeysOpacitySlider",
+        "vesperToolsConfigBestKeysOpacitySlider",
         bestKeysTab,
         L["CONFIG_BEST_KEYS_OPACITY"],
         bestKeysFontSizeSlider,
@@ -1463,7 +1463,7 @@ function Configuration:BuildPanel()
     setFontStringTextSafe(bagsSectionTitle, L["CONFIG_SECTION_BAGS_WINDOW"], 13, "OUTLINE", GameFontHighlight)
 
     local bagsColumnsSlider = self:CreateIntegerSlider(
-        "VesperGuildConfigBagsColumnsSlider",
+        "vesperToolsConfigBagsColumnsSlider",
         bagsTab,
         L["CONFIG_BAGS_COLUMNS"],
         bagsSectionTitle,
@@ -1472,7 +1472,7 @@ function Configuration:BuildPanel()
         20
     )
     local bagsIconSizeSlider = self:CreateIntegerSlider(
-        "VesperGuildConfigBagsIconSizeSlider",
+        "vesperToolsConfigBagsIconSizeSlider",
         bagsTab,
         L["CONFIG_BAGS_ICON_SIZE"],
         bagsColumnsSlider,
@@ -1481,7 +1481,7 @@ function Configuration:BuildPanel()
         56
     )
     local bagsStackCountFontSizeSlider = self:CreateIntegerSlider(
-        "VesperGuildConfigBagsStackCountFontSizeSlider",
+        "vesperToolsConfigBagsStackCountFontSizeSlider",
         bagsTab,
         L["CONFIG_BAGS_STACK_COUNT_FONT_SIZE"],
         bagsIconSizeSlider,
@@ -1490,7 +1490,7 @@ function Configuration:BuildPanel()
         20
     )
     local bagsItemLevelFontSizeSlider = self:CreateIntegerSlider(
-        "VesperGuildConfigBagsItemLevelFontSizeSlider",
+        "vesperToolsConfigBagsItemLevelFontSizeSlider",
         bagsTab,
         L["CONFIG_BAGS_ILVL_FONT_SIZE"],
         bagsStackCountFontSizeSlider,
@@ -1499,14 +1499,14 @@ function Configuration:BuildPanel()
         18
     )
     local bagsShowItemLevelCheckbox = self:CreateCheckButton(
-        "VesperGuildConfigBagsShowItemLevelCheckbox",
+        "vesperToolsConfigBagsShowItemLevelCheckbox",
         bagsTab,
         L["CONFIG_BAGS_SHOW_ITEM_LEVEL"],
         bagsItemLevelFontSizeSlider,
         -30
     )
     local bagsQualityGlowSlider = self:CreatePercentSlider(
-        "VesperGuildConfigBagsQualityGlowSlider",
+        "vesperToolsConfigBagsQualityGlowSlider",
         bagsTab,
         L["CONFIG_BAGS_QUALITY_GLOW"],
         bagsShowItemLevelCheckbox,
@@ -1516,7 +1516,7 @@ function Configuration:BuildPanel()
         0.05
     )
     local bagsReplaceBlizzardCheckbox = self:CreateCheckButton(
-        "VesperGuildConfigBagsReplaceBlizzardCheckbox",
+        "vesperToolsConfigBagsReplaceBlizzardCheckbox",
         bagsTab,
         L["CONFIG_BAGS_REPLACE_BLIZZARD"],
         bagsQualityGlowSlider,
@@ -1528,7 +1528,7 @@ function Configuration:BuildPanel()
     setFontStringTextSafe(bankSectionTitle, L["CONFIG_SECTION_BANK_WINDOW"], 13, "OUTLINE", GameFontHighlight)
 
     local bankColumnsSlider = self:CreateIntegerSlider(
-        "VesperGuildConfigBankColumnsSlider",
+        "vesperToolsConfigBankColumnsSlider",
         bankTab,
         L["CONFIG_BANK_COLUMNS"],
         bankSectionTitle,
@@ -1537,7 +1537,7 @@ function Configuration:BuildPanel()
         20
     )
     local bankIconSizeSlider = self:CreateIntegerSlider(
-        "VesperGuildConfigBankIconSizeSlider",
+        "vesperToolsConfigBankIconSizeSlider",
         bankTab,
         L["CONFIG_BANK_ICON_SIZE"],
         bankColumnsSlider,
@@ -1546,7 +1546,7 @@ function Configuration:BuildPanel()
         56
     )
     local bankStackCountFontSizeSlider = self:CreateIntegerSlider(
-        "VesperGuildConfigBankStackCountFontSizeSlider",
+        "vesperToolsConfigBankStackCountFontSizeSlider",
         bankTab,
         L["CONFIG_BANK_STACK_COUNT_FONT_SIZE"],
         bankIconSizeSlider,
@@ -1555,7 +1555,7 @@ function Configuration:BuildPanel()
         20
     )
     local bankItemLevelFontSizeSlider = self:CreateIntegerSlider(
-        "VesperGuildConfigBankItemLevelFontSizeSlider",
+        "vesperToolsConfigBankItemLevelFontSizeSlider",
         bankTab,
         L["CONFIG_BANK_ILVL_FONT_SIZE"],
         bankStackCountFontSizeSlider,
@@ -1564,14 +1564,14 @@ function Configuration:BuildPanel()
         18
     )
     local bankShowItemLevelCheckbox = self:CreateCheckButton(
-        "VesperGuildConfigBankShowItemLevelCheckbox",
+        "vesperToolsConfigBankShowItemLevelCheckbox",
         bankTab,
         L["CONFIG_BANK_SHOW_ITEM_LEVEL"],
         bankItemLevelFontSizeSlider,
         -30
     )
     local bankQualityGlowSlider = self:CreatePercentSlider(
-        "VesperGuildConfigBankQualityGlowSlider",
+        "vesperToolsConfigBankQualityGlowSlider",
         bankTab,
         L["CONFIG_BANK_QUALITY_GLOW"],
         bankShowItemLevelCheckbox,
@@ -1581,7 +1581,7 @@ function Configuration:BuildPanel()
         0.05
     )
     local bankReplaceBlizzardCheckbox = self:CreateCheckButton(
-        "VesperGuildConfigBankReplaceBlizzardCheckbox",
+        "vesperToolsConfigBankReplaceBlizzardCheckbox",
         bankTab,
         L["CONFIG_BANK_REPLACE_BLIZZARD"],
         bankQualityGlowSlider,
@@ -1643,7 +1643,7 @@ function Configuration:BuildPanel()
             if not profile then
                 return
             end
-            local minSize, maxSize, defaultSize = VesperGuild:GetTopUtilityButtonSizeBounds()
+            local minSize, maxSize, defaultSize = vesperTools:GetTopUtilityButtonSizeBounds()
             local normalized = clamp(roundToStep(tonumber(value) or defaultSize, 1), minSize, maxSize)
             normalized = math.floor(normalized + 0.5)
             if math.abs(normalized - value) > 0.0001 then
@@ -1826,7 +1826,7 @@ function Configuration:RefreshControls()
     local rosterFontSize = clamp(tonumber(profile.style.fontSize.roster) or 12, 8, 24)
     local portalsFontSize = clamp(tonumber(profile.style.fontSize.portals) or 12, 8, 24)
     local bestKeysFontSize = clamp(tonumber(profile.style.fontSize.bestKeys) or 11, 8, 24)
-    local minUtilityButtonSize, maxUtilityButtonSize, defaultUtilityButtonSize = VesperGuild:GetTopUtilityButtonSizeBounds()
+    local minUtilityButtonSize, maxUtilityButtonSize, defaultUtilityButtonSize = vesperTools:GetTopUtilityButtonSizeBounds()
     local utilityButtonSize = clamp(
         math.floor((tonumber(profile.portals.utilityButtonSize) or defaultUtilityButtonSize) + 0.5),
         minUtilityButtonSize,
@@ -1929,7 +1929,7 @@ function Configuration:RefreshControls()
     end
 
     -- Keep toy name-add controls in sync with real toy availability.
-    local ownedToyOptions = VesperGuild:GetOwnedToyOptions()
+    local ownedToyOptions = vesperTools:GetOwnedToyOptions()
     local hasOwnedToys = type(ownedToyOptions) == "table" and #ownedToyOptions > 0
     if self.toyNameInput then
         self.toyNameInput:Enable()

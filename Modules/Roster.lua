@@ -1,7 +1,7 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local Roster = VesperGuild:NewModule("Roster", "AceConsole-3.0", "AceEvent-3.0")
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local Roster = vesperTools:NewModule("Roster", "AceConsole-3.0", "AceEvent-3.0")
 local AceGUI = LibStub("AceGUI-3.0")
-local L = VesperGuild.L
+local L = vesperTools.L
 local HEADER_ACTION_BUTTON_HEIGHT = 22
 local HEADER_ACTION_BUTTON_GAP = 6
 
@@ -27,7 +27,7 @@ local function createHeaderActionButton(parent, anchor, width, label, onClick)
     local text = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     text:SetPoint("CENTER", 0, 0)
     text:SetText(label)
-    VesperGuild:ApplyConfiguredFont(text, 11, "")
+    vesperTools:ApplyConfiguredFont(text, 11, "")
     button.text = text
 
     return button
@@ -38,9 +38,9 @@ function Roster:OnInitialize()
 end
 
 function Roster:OnEnable()
-    self:RegisterMessage("VESPERGUILD_ILVL_UPDATE", "OnSyncUpdate")
-    self:RegisterMessage("VESPERGUILD_BESTKEYS_UPDATE", "OnSyncUpdate")
-    self:RegisterMessage("VESPERGUILD_CONFIG_CHANGED", "OnConfigChanged")
+    self:RegisterMessage("VESPERTOOLS_ILVL_UPDATE", "OnSyncUpdate")
+    self:RegisterMessage("VESPERTOOLS_BESTKEYS_UPDATE", "OnSyncUpdate")
+    self:RegisterMessage("VESPERTOOLS_CONFIG_CHANGED", "OnConfigChanged")
 end
 
 function Roster:OnSyncUpdate()
@@ -55,10 +55,10 @@ function Roster:OnConfigChanged()
         return
     end
 
-    local baseFontSize = VesperGuild:GetConfiguredFontSize("roster", 12, 8, 24)
-    self.frame:SetBackdropColor(0.07, 0.07, 0.07, VesperGuild:GetConfiguredOpacity("roster"))
+    local baseFontSize = vesperTools:GetConfiguredFontSize("roster", 12, 8, 24)
+    self.frame:SetBackdropColor(0.07, 0.07, 0.07, vesperTools:GetConfiguredOpacity("roster"))
     if self.titleText then
-        VesperGuild:ApplyConfiguredFont(self.titleText, baseFontSize + 4, "")
+        vesperTools:ApplyConfiguredFont(self.titleText, baseFontSize + 4, "")
     end
     if self.frame:IsShown() then
         self:UpdateRosterList()
@@ -83,7 +83,7 @@ function Roster:GetContextMenuDropdown()
         return self.contextMenuDropdown
     end
 
-    self.contextMenuDropdown = CreateFrame("Frame", "VesperGuildRosterContextMenu", UIParent, "UIDropDownMenuTemplate")
+    self.contextMenuDropdown = CreateFrame("Frame", "vesperToolsContextMenu", UIParent, "UIDropDownMenuTemplate")
     self.contextMenuDropdown:SetFrameStrata("TOOLTIP")
     self.contextMenuDropdown:SetFrameLevel(dropdownLevel)
     self.contextMenuDropdown:SetToplevel(true)
@@ -98,7 +98,7 @@ function Roster:GetContextMenuAnchor(anchorButton)
     end
 
     if not (self.contextMenuAnchor and self.contextMenuAnchor.GetName) then
-        self.contextMenuAnchor = CreateFrame("Frame", "VesperGuildRosterContextMenuAnchor", UIParent)
+        self.contextMenuAnchor = CreateFrame("Frame", "vesperToolsContextMenuAnchor", UIParent)
         self.contextMenuAnchor:SetSize(2, 2)
         self.contextMenuAnchor:SetClampedToScreen(true)
     end
@@ -190,18 +190,18 @@ function Roster:ShowRoster()
     end
 
     -- Create Custom Frame
-    self.frame = CreateFrame("Frame", "VesperGuildRosterFrame", UIParent, "BackdropTemplate" )
+    self.frame = CreateFrame("Frame", "vesperToolsFrame", UIParent, "BackdropTemplate" )
     self.frame:SetSize(600, 250)
 
     -- Restore saved position or use default
-    if VesperGuild.db.profile.rosterPosition then
-        local pos = VesperGuild.db.profile.rosterPosition
+    if vesperTools.db.profile.rosterPosition then
+        local pos = vesperTools.db.profile.rosterPosition
         self.frame:SetPoint(pos.point, UIParent, pos.relativePoint, pos.xOfs, pos.yOfs)
     else
         self.frame:SetPoint("RIGHT", UIParent, "CENTER", -250, 0)
     end
 
-    VesperGuild:ApplyAddonWindowLayer(self.frame)
+    vesperTools:ApplyAddonWindowLayer(self.frame)
     self.frame:SetMovable(true)
     self.frame:EnableMouse(true)
     self.frame:SetResizable(true)
@@ -213,7 +213,7 @@ function Roster:ShowRoster()
          edgeFile = "Interface\\Buttons\\WHITE8x8",
          edgeSize = 1,
      })
-     self.frame:SetBackdropColor(0.07, 0.07, 0.07, VesperGuild:GetConfiguredOpacity("roster")) -- #121212
+     self.frame:SetBackdropColor(0.07, 0.07, 0.07, vesperTools:GetConfiguredOpacity("roster")) -- #121212
      local _, englishClass = UnitClass("player")
      local classColor = C_ClassColor.GetClassColor(englishClass)
      self.frame:SetBackdropBorderColor(classColor.r, classColor.g, classColor.b, 1)
@@ -232,7 +232,7 @@ function Roster:ShowRoster()
     title:SetPoint("LEFT", 10, 0)
     local guildName = GetGuildInfo("player")
     title:SetText(guildName or L["ROSTER_TITLE_FALLBACK"])
-    VesperGuild:ApplyConfiguredFont(title, VesperGuild:GetConfiguredFontSize("roster", 12, 8, 24) + 4, "")
+    vesperTools:ApplyConfiguredFont(title, vesperTools:GetConfiguredFontSize("roster", 12, 8, 24) + 4, "")
     self.titleText = title
     
     -- Make draggable via titlebar
@@ -243,7 +243,7 @@ function Roster:ShowRoster()
         self.frame:StopMovingOrSizing()
         -- Save position to database
         local point, _, relativePoint, xOfs, yOfs = self.frame:GetPoint()
-        VesperGuild.db.profile.rosterPosition = {
+        vesperTools.db.profile.rosterPosition = {
             point = point,
             relativePoint = relativePoint,
             xOfs = xOfs,
@@ -252,7 +252,7 @@ function Roster:ShowRoster()
     end)
     
     -- Close Button
-    local closeBtn = VesperGuild:CreateModernCloseButton(titlebar, function()
+    local closeBtn = vesperTools:CreateModernCloseButton(titlebar, function()
         -- Clean up portal buttons before closing
         if self.portalButtons then
             for _, btn in ipairs(self.portalButtons) do
@@ -272,7 +272,7 @@ function Roster:ShowRoster()
             self.dungeonPanel = nil
         end
         -- Also hide the Portals frame
-        local Portals = VesperGuild:GetModule("Portals", true)
+        local Portals = vesperTools:GetModule("Portals", true)
         if Portals and Portals.VesperPortalsUI then
             Portals.VesperPortalsUI:Hide()
         end
@@ -307,11 +307,11 @@ function Roster:ShowRoster()
     
     -- Sync Button
     local syncBtn = createHeaderActionButton(titlebar, closeBtn, 72, L["ROSTER_BUTTON_SYNC"], function()
-        local KeystoneSync = VesperGuild:GetModule("KeystoneSync", true)
+        local KeystoneSync = vesperTools:GetModule("KeystoneSync", true)
         if KeystoneSync then
             KeystoneSync:RequestGuildKeystones()
         end
-        local Auto = VesperGuild:GetModule("Automation", true)
+        local Auto = vesperTools:GetModule("Automation", true)
         if Auto then
             Auto:ManualSync()
         end
@@ -321,13 +321,13 @@ function Roster:ShowRoster()
     -- Configuration button (left of Sync) opens the custom config panel.
     local confBtn = createHeaderActionButton(titlebar, syncBtn, 56, L["ROSTER_BUTTON_CONFIG"], function(_, mouseButton)
         if mouseButton == "LeftButton" then
-            VesperGuild:OpenConfig()
+            vesperTools:OpenConfig()
         end
     end)
 
     local bagsBtn = createHeaderActionButton(titlebar, confBtn, 56, L["ROSTER_BUTTON_BAGS"], function(_, mouseButton)
         if mouseButton == "LeftButton" then
-            local BagsWindow = VesperGuild:GetModule("BagsWindow", true)
+            local BagsWindow = vesperTools:GetModule("BagsWindow", true)
             if BagsWindow and type(BagsWindow.Toggle) == "function" then
                 BagsWindow:Toggle()
             end
@@ -336,7 +336,7 @@ function Roster:ShowRoster()
 
     local bankBtn = createHeaderActionButton(titlebar, bagsBtn, 56, L["ROSTER_BUTTON_BANK"], function(_, mouseButton)
         if mouseButton == "LeftButton" then
-            local BankWindow = VesperGuild:GetModule("BankWindow", true)
+            local BankWindow = vesperTools:GetModule("BankWindow", true)
             if BankWindow and type(BankWindow.Toggle) == "function" then
                 BankWindow:Toggle()
             end
@@ -398,7 +398,7 @@ local function ApplyWidgetFont(widget, size, flags)
         return
     end
 
-    local path = VesperGuild:GetConfiguredFontPath()
+    local path = vesperTools:GetConfiguredFontPath()
     local resolvedSize = tonumber(size) or 12
     local resolvedFlags = type(flags) == "string" and flags or ""
 
@@ -410,7 +410,7 @@ local function ApplyWidgetFont(widget, size, flags)
     end
 
     if widget.label then
-        VesperGuild:ApplyConfiguredFont(widget.label, resolvedSize, resolvedFlags)
+        vesperTools:ApplyConfiguredFont(widget.label, resolvedSize, resolvedFlags)
     end
 end
 
@@ -433,7 +433,7 @@ function Roster:UpdateRosterList()
     if not self.frame then return end
 
     -- Base row/header typography controlled from config per-frame tab.
-    local rosterFontSize = VesperGuild:GetConfiguredFontSize("roster", 12, 8, 24)
+    local rosterFontSize = vesperTools:GetConfiguredFontSize("roster", 12, 8, 24)
 
     -- Clean up any existing portal buttons
     if self.portalButtons then
@@ -501,8 +501,8 @@ function Roster:UpdateRosterList()
     self.scroll:AddChild(line)
 
     -- Cache lookups before the loop
-    local DataHandle = VesperGuild:GetModule("DataHandle", true)
-    local KeystoneSync = VesperGuild:GetModule("KeystoneSync", true)
+    local DataHandle = vesperTools:GetModule("DataHandle", true)
+    local KeystoneSync = vesperTools:GetModule("KeystoneSync", true)
     local playerRealm = GetRealmName()
     local playerRealmNormalized = GetNormalizedRealmName()
     local playerFaction = UnitFactionGroup("player")
@@ -554,13 +554,13 @@ function Roster:UpdateRosterList()
 
             -- Rating
             local ratingNum = 0
-            local keyData = VesperGuild.db.global.keystones
+            local keyData = vesperTools.db.global.keystones
                 and (
                     -- Same multi-key fallback strategy as ilvl for cross-realm consistency.
-                    VesperGuild.db.global.keystones[fullName]
-                    or VesperGuild.db.global.keystones[name]
-                    or VesperGuild.db.global.keystones[displayName]
-                    or VesperGuild.db.global.keystones[displayName .. "-" .. playerRealm]
+                    vesperTools.db.global.keystones[fullName]
+                    or vesperTools.db.global.keystones[name]
+                    or vesperTools.db.global.keystones[displayName]
+                    or vesperTools.db.global.keystones[displayName .. "-" .. playerRealm]
                 )
             if keyData and keyData.rating then
                 ratingNum = keyData.rating

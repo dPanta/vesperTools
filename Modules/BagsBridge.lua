@@ -1,5 +1,5 @@
-local VesperGuild = VesperGuild or LibStub("AceAddon-3.0"):GetAddon("VesperGuild")
-local BagsBridge = VesperGuild:NewModule("BagsBridge", "AceEvent-3.0")
+local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
+local BagsBridge = vesperTools:NewModule("BagsBridge", "AceEvent-3.0")
 
 local BAG_BINDINGS = {
     "TOGGLEBACKPACK",
@@ -20,8 +20,8 @@ local BAG_HOOK_SPECS = {
     { name = "OpenBag", action = "show", expectsBagID = true },
 }
 
-function VesperGuild_ToggleBags()
-    local addon = VesperGuild or (LibStub and LibStub("AceAddon-3.0", true) and LibStub("AceAddon-3.0"):GetAddon("VesperGuild", true))
+function vesperTools_ToggleBags()
+    local addon = vesperTools or (LibStub and LibStub("AceAddon-3.0", true) and LibStub("AceAddon-3.0"):GetAddon("vesperTools", true))
     if not addon then
         return
     end
@@ -32,13 +32,13 @@ function VesperGuild_ToggleBags()
     end
 end
 
-_G.BINDING_NAME_VESPERGUILD_TOGGLEBAGS = "Toggle VesperGuild Bags"
+_G.BINDING_NAME_VESPERTOOLS_TOGGLEBAGS = "Toggle vesperTools Bags"
 
 function BagsBridge:OnInitialize()
     self.deferredActions = {}
-    self.bindingFrame = CreateFrame("Frame", "VesperGuildBagsBindingFrame", UIParent)
+    self.bindingFrame = CreateFrame("Frame", "vesperToolsBagsBindingFrame", UIParent)
     self.bindingFrame:Hide()
-    self.bankProxyFrame = CreateFrame("Frame", "VesperGuildBankProxyFrame", UIParent)
+    self.bankProxyFrame = CreateFrame("Frame", "vesperToolsBankProxyFrame", UIParent)
     self.bankProxyFrame:Hide()
     self.installedHooks = {}
     self.hookedButtons = {}
@@ -60,13 +60,13 @@ function BagsBridge:OnEnable()
     self:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_SHOW")
     self:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_HIDE")
     self:RegisterEvent("ADDON_LOADED")
-    self:RegisterMessage("VESPERGUILD_CONFIG_CHANGED", "OnConfigChanged")
+    self:RegisterMessage("VESPERTOOLS_CONFIG_CHANGED", "OnConfigChanged")
     self:InstallHooks()
     self:RefreshReplacementState()
 end
 
 function BagsBridge:GetProfile()
-    return VesperGuild:GetBagsProfile()
+    return vesperTools:GetBagsProfile()
 end
 
 function BagsBridge:IsBackpackReplacementEnabled()
@@ -144,7 +144,7 @@ function BagsBridge:IsTrackedBackpackBagID(bagID)
         return false
     end
 
-    local store = VesperGuild:GetModule("BagsStore", true)
+    local store = vesperTools:GetModule("BagsStore", true)
     if not store or type(store.IsTrackedBagID) ~= "function" then
         return false
     end
@@ -162,7 +162,7 @@ function BagsBridge:HideBlizzardBags()
         return
     end
 
-    local store = VesperGuild:GetModule("BagsStore", true)
+    local store = vesperTools:GetModule("BagsStore", true)
     if not store or type(store.GetTrackedBagIDs) ~= "function" then
         return
     end
@@ -178,7 +178,7 @@ function BagsBridge:ShowReplacementWindow()
         return
     end
 
-    local BagsWindow = VesperGuild:GetModule("BagsWindow", true)
+    local BagsWindow = vesperTools:GetModule("BagsWindow", true)
     if not BagsWindow then
         return
     end
@@ -192,7 +192,7 @@ function BagsBridge:ToggleReplacementWindow(source)
         return
     end
 
-    local BagsWindow = VesperGuild:GetModule("BagsWindow", true)
+    local BagsWindow = vesperTools:GetModule("BagsWindow", true)
     if not BagsWindow then
         return
     end
@@ -270,7 +270,7 @@ function BagsBridge:RefreshBindingOverrides()
         for keyIndex = 1, #keys do
             local key = keys[keyIndex]
             if type(key) == "string" and key ~= "" then
-                SetOverrideBinding(self.bindingFrame, true, key, "VESPERGUILD_TOGGLEBAGS")
+                SetOverrideBinding(self.bindingFrame, true, key, "VESPERTOOLS_TOGGLEBAGS")
             end
         end
     end
@@ -336,7 +336,7 @@ function BagsBridge:ShowBankReplacementWindowForView(preferredViewKey)
 
     self:ApplyBankFrameReplacementState()
 
-    local BankWindow = VesperGuild:GetModule("BankWindow", true)
+    local BankWindow = vesperTools:GetModule("BankWindow", true)
     if not BankWindow or type(BankWindow.ShowWindow) ~= "function" then
         return
     end
@@ -349,7 +349,7 @@ function BagsBridge:ShowBankReplacementWindowForView(preferredViewKey)
 end
 
 function BagsBridge:HideBankReplacementWindow()
-    local BankWindow = VesperGuild:GetModule("BankWindow", true)
+    local BankWindow = vesperTools:GetModule("BankWindow", true)
     if not BankWindow or not BankWindow.frame then
         return
     end
@@ -436,7 +436,7 @@ function BagsBridge:PLAYER_INTERACTION_MANAGER_FRAME_HIDE(_, interactionType)
 end
 
 function BagsBridge:GetLiveBankStore()
-    return VesperGuild:GetModule("BankStore", true)
+    return vesperTools:GetModule("BankStore", true)
 end
 
 function BagsBridge:IsAnyWritableBankLive()
@@ -488,7 +488,7 @@ function BagsBridge:ShowBagsForLiveBankSession()
         return
     end
 
-    local BagsWindow = VesperGuild:GetModule("BagsWindow", true)
+    local BagsWindow = vesperTools:GetModule("BagsWindow", true)
     if not BagsWindow or type(BagsWindow.ShowWindow) ~= "function" then
         return
     end
@@ -508,7 +508,7 @@ function BagsBridge:HideBagsOpenedForBankSession()
 
     self.bankSessionOpenedBags = false
 
-    local BagsWindow = VesperGuild:GetModule("BagsWindow", true)
+    local BagsWindow = vesperTools:GetModule("BagsWindow", true)
     if not BagsWindow or not BagsWindow.frame or not BagsWindow.frame:IsShown() then
         return
     end
