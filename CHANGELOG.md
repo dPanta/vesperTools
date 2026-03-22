@@ -1,3 +1,12 @@
+## 2.4.1 - 2026-03-22
+
+### Changed
+- Fixed the primary hearthstone configuration so `RANDOM DISCO` stays available as a valid selectable option for the top utility button flow.
+- Blacklisted Dalaran Hearthstone from the primary hearthstone selection pool so it no longer appears in the primary picker or in the filtered `RANDOM DISCO` primary rotation.
+
+### Notes
+- This hotfix tightens the hearthstone selection rules without changing the rest of the `2.4.0` guild lookup feature set.
+
 ## 2.4.0 - 2026-03-22
 
 ### Changed

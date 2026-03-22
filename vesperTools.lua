@@ -115,6 +115,7 @@ local HEARTHSTONE_CATALOG = {
 -- Primary dropdown excludes these so first button focuses on non-default utility choices.
 local PRIMARY_HEARTHSTONE_BLACKLIST = {
     [110560] = true, -- Garrison Hearthstone
+    [140192] = true, -- Dalaran Hearthstone
     [253629] = true, -- Personal Key to the Arcantina
 }
 
