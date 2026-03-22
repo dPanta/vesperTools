@@ -1,3 +1,9 @@
+## 1.0.1 - 2026-03-22
+
+Hotfix version bump only.
+
+No addon changes in this release.
+
 ## 1.0.0 - 2026-03-22
 
 Initial `vesperTools` release.

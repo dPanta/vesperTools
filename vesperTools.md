@@ -3,8 +3,8 @@
 **vesperTools** is a guild-focused addon built to make **Mythic+ coordination, roster management, portals, and inventory access** easier and faster.
 
 It brings together guild utilities, key tracking, seasonal dungeon portal access, item level sharing, and a **full bags, bank, and warband bank replacement** with **account-wide inventory browsing** in one addon.
-
 I am making this as a tool for my guildies mostly, but it should work for everyone all the same :)
+
 ---
 
 ## Highlights

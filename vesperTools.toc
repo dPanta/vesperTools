@@ -1,8 +1,8 @@
 ## Interface: 120000,120001
 ## Title: vesperTools
-## Notes: Guild M+ helper.
+## Notes: Various Things for Various other things.
 ## Author: dPanta
-## Version: 1.0.0
+## Version: 1.0.1
 ## IconTexture: Interface\AddOns\vesperTools\Media\vesperTools.png
 ## SavedVariables: vesperToolsDB, vesperToolsBagsDB, VesperGuildDB, VesperGuildBagsDB
 ## X-Wago-ID: XKqAw8Ky
