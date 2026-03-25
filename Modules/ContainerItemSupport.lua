@@ -112,12 +112,51 @@ local function getItemLevelForRecord(record)
 end
 
 local function defaultPickupItem(_, button)
-    if C_Container and C_Container.PickupContainerItem then
-        C_Container.PickupContainerItem(button.bagID, button.slotID)
+    local bagID = button and (button.actionBagID or button.bagID) or nil
+    local slotID = button and (button.actionSlotID or button.slotID) or nil
+
+    if C_Container and C_Container.PickupContainerItem and bagID and slotID then
+        C_Container.PickupContainerItem(bagID, slotID)
         return true
     end
 
     return false
+end
+
+local function defaultUseItem(_, button)
+    local bagID = button and (button.actionBagID or button.bagID) or nil
+    local slotID = button and (button.actionSlotID or button.slotID) or nil
+
+    if C_Container and C_Container.UseContainerItem and bagID and slotID then
+        C_Container.UseContainerItem(bagID, slotID)
+        return true
+    end
+
+    if UseContainerItem and bagID and slotID then
+        UseContainerItem(bagID, slotID)
+        return true
+    end
+
+    return false
+end
+
+local function itemHasUseAction(itemRef)
+    if itemRef == nil then
+        return false
+    end
+
+    local spellName
+    if C_Item and C_Item.GetItemSpell then
+        spellName = C_Item.GetItemSpell(itemRef)
+    elseif GetItemSpell then
+        spellName = GetItemSpell(itemRef)
+    end
+
+    if type(spellName) == "string" then
+        return spellName ~= ""
+    end
+
+    return spellName ~= nil
 end
 
 function vesperTools:CreateContainerItemButton(host, parent, options)
@@ -241,10 +280,14 @@ function vesperTools:CreateContainerItemController(host, config)
 
     function controller:ConfigureTooltip(button)
         local isInteractive = self:IsButtonInteractive(button)
+        local tooltipBagID, tooltipSlotID = nil, nil
+        if isInteractive then
+            tooltipBagID, tooltipSlotID = self:GetButtonBagSlot(button, true)
+        end
 
         GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-        if isInteractive and not button.isCombined and button.bagID and button.slotID then
-            GameTooltip:SetBagItem(button.bagID, button.slotID)
+        if isInteractive and tooltipBagID and tooltipSlotID then
+            GameTooltip:SetBagItem(tooltipBagID, tooltipSlotID)
         else
             if type(button.hyperlink) == "string" and button.hyperlink ~= "" then
                 GameTooltip:SetHyperlink(button.hyperlink)
@@ -262,17 +305,84 @@ function vesperTools:CreateContainerItemController(host, config)
         GameTooltip:Show()
     end
 
+    function controller:CanUseCombinedButton(button)
+        if not button or not button.isCombined or not self:IsButtonInteractive(button) then
+            return false
+        end
+
+        if type(self.config.canUseCombinedButton) == "function" then
+            return self.config.canUseCombinedButton(host, button) and true or false
+        end
+
+        if button.categoryKey == "container" then
+            return true
+        end
+
+        return itemHasUseAction(button.hyperlink or button.itemID)
+    end
+
+    function controller:GetButtonBagSlot(button, allowCombinedUse)
+        if not button then
+            return nil, nil
+        end
+
+        if not button.isCombined and button.bagID and button.slotID then
+            return button.bagID, button.slotID
+        end
+
+        if not allowCombinedUse or not self:CanUseCombinedButton(button) or type(button.combinedRecords) ~= "table" then
+            return nil, nil
+        end
+
+        local fallbackBagID, fallbackSlotID = nil, nil
+        for i = 1, #button.combinedRecords do
+            local record = button.combinedRecords[i]
+            local bagID = type(record) == "table" and record.bagID or nil
+            local slotID = type(record) == "table" and record.slotID or nil
+            if bagID and slotID then
+                if not record.isLocked then
+                    return bagID, slotID
+                end
+
+                if not fallbackBagID then
+                    fallbackBagID, fallbackSlotID = bagID, slotID
+                end
+            end
+        end
+
+        return fallbackBagID, fallbackSlotID
+    end
+
     function controller:PickupItem(button)
-        if button.isCombined or not self:IsButtonInteractive(button) or InCombatLockdown() then
+        if not self:IsButtonInteractive(button) or InCombatLockdown() then
             return false
         end
 
-        if not button.bagID or not button.slotID then
+        local bagID, slotID = self:GetButtonBagSlot(button, false)
+        if not bagID or not slotID then
             return false
         end
 
+        button.actionBagID = bagID
+        button.actionSlotID = slotID
         local pickupItem = type(self.config.pickupItem) == "function" and self.config.pickupItem or defaultPickupItem
         return pickupItem(host, button) and true or false
+    end
+
+    function controller:UseItem(button)
+        if not self:IsButtonInteractive(button) or InCombatLockdown() then
+            return false
+        end
+
+        local bagID, slotID = self:GetButtonBagSlot(button, true)
+        if not bagID or not slotID then
+            return false
+        end
+
+        button.actionBagID = bagID
+        button.actionSlotID = slotID
+        local useItem = type(self.config.useItem) == "function" and self.config.useItem or defaultUseItem
+        return useItem(host, button) and true or false
     end
 
     function controller:HandleItemDrag(button)
@@ -280,11 +390,14 @@ function vesperTools:CreateContainerItemController(host, config)
     end
 
     function controller:HandleItemClick(button, mouseButton)
-        if mouseButton == "LeftButton"
-            and type(button.hyperlink) == "string"
+        if type(button.hyperlink) == "string"
             and button.hyperlink ~= ""
             and HandleModifiedItemClick
             and HandleModifiedItemClick(button.hyperlink) then
+            return
+        end
+
+        if mouseButton == "RightButton" and self:UseItem(button) then
             return
         end
 
@@ -296,6 +409,9 @@ function vesperTools:CreateContainerItemController(host, config)
             return self.config.overlayMouseEnabled(host, button) and true or false
         end
         if self.config.overlayMouseEnabled == nil then
+            if button and button.categoryKey == "container" then
+                return false
+            end
             return true
         end
 
@@ -380,10 +496,14 @@ function vesperTools:CreateContainerItemController(host, config)
         button.itemName = record.itemName
         button.itemDescription = record.itemDescription
         button.searchText = record.searchText
+        button.categoryKey = record.categoryKey
         button.hyperlink = record.hyperlink
+        button.combinedRecords = type(record.combinedRecords) == "table" and record.combinedRecords or nil
         button.isCombined = record.isCombined and true or false
         button.bagID = button.isCombined and nil or record.bagID
         button.slotID = button.isCombined and nil or record.slotID
+        button.actionBagID = nil
+        button.actionSlotID = nil
         button.ownerName = context and context.ownerName or nil
         button.isInteractive = isContextInteractive(context)
         button.combinedStacks = tonumber(record.combinedStacks) or 1

@@ -1,3 +1,16 @@
+## 2.5.1 - 2026-03-25
+
+### Changed
+- Documented the new account-wide Weekly Vault rewards viewer with character switcher in both addon overview documents.
+
+### Fixed
+- Restored live bag-container use/open clicks after the shared container item interaction refactor, so usable container items can be opened from the replacement Bags and Bank windows again.
+- Fixed combined stacks of identical usable containers so the merged button can still open one real container by resolving a representative live bag slot behind the combined entry.
+- Stopped the hidden Blizzard secure container overlay from consuming mouse input on container-category buttons, so container clicks reach the intended custom use path.
+
+### Notes
+- This hotfix focuses on stabilizing replacement inventory interactions for usable containers while rounding out the documentation for the new multi-character Weekly Vault viewer.
+
 ## 2.5.0 - 2026-03-24
 
 ### Changed

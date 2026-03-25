@@ -22,6 +22,7 @@ I am making this as a tool for my guildies mostly, but it should work for everyo
 - Full bags, bank, and warband bank replacement
 - Account-wide inventory browsing across characters
 - Search for items throughout the guild players inventories (see below)
+- Account-wide Weekly Vault rewards viewer with character switcher
 
 ---
 
@@ -59,6 +60,14 @@ Clicking a key in the roster window will cast the corresponding dungeon teleport
 ### Great Vault shortcut
 
 A button below the portals frame opens the **Great Vault Rewards** window.
+
+### Account-wide Weekly Vault rewards viewer
+
+Browse current-week Great Vault rewards across your characters in one window.
+
+- Includes a character switcher for saved vault snapshots
+- Lets your current character open Blizzard's live Great Vault directly
+- Makes it easy to compare weekly rewards without logging through every alt
 
 ### Mythic+ progress overview
 
