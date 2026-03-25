@@ -23,6 +23,22 @@ local cachedRealmName = nil
 local lastBestKeysRequestBySender = {}
 local pendingBestKeysRequestResponse = false
 
+local function getChallengeCompletionInfo()
+    if C_ChallengeMode and type(C_ChallengeMode.GetChallengeCompletionInfo) == "function" then
+        local info = C_ChallengeMode.GetChallengeCompletionInfo()
+        if type(info) == "table" then
+            return info.mapChallengeModeID, tonumber(info.level), info.time, info.onTime and true or false
+        end
+    end
+
+    if C_ChallengeMode and type(C_ChallengeMode.GetCompletionInfo) == "function" then
+        local mapID, level, duration, onTime = C_ChallengeMode.GetCompletionInfo()
+        return mapID, tonumber(level), duration, onTime and true or false
+    end
+
+    return nil, nil, nil, false
+end
+
 function Automation:OnEnable()
     -- Register all communication channels used by this module.
     -- Register comm prefixes
@@ -255,7 +271,11 @@ end
 
 -- M+ end reminder (only if timed and current key level <= completed level)
 function Automation:OnMPlusCompleted()
-    local _, level, _, onTime = C_ChallengeMode.GetCompletionInfo()
+    local _, level, _, onTime = getChallengeCompletionInfo()
+
+    if not level then
+        return
+    end
 
     -- Only fire if the run was in time
     if not onTime then return end

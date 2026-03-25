@@ -1,3 +1,18 @@
+## 2.7.0 - 2026-03-25
+
+### Changed
+- Added bundled `LibSharedMedia-3.0` support for the shared addon font system so built-in and SharedMedia-registered fonts can be selected from one place.
+- Reworked the configuration font selector into a scrollable preview picker that stays usable with long font lists and renders each entry in its own font when possible.
+
+### Fixed
+- Fixed Bags and Bank category headers, controls, and reused labels so they update immediately when the configured font changes.
+- Fixed SharedMedia initialization and path handling so registered third-party fonts load more reliably and preview correctly on this install.
+- Fixed combined usable-item stacks in the replacement Bags and Bank windows so right-click use routes through Blizzard's secure native container handling instead of insecure `UseContainerItem()` calls.
+- Fixed the Mythic+ completion automation hook on clients that expose `C_ChallengeMode.GetChallengeCompletionInfo()` instead of the older `GetCompletionInfo()` API.
+
+### Notes
+- This minor release focuses on better font customization, safer live inventory interaction, and more reliable post-key automation behavior.
+
 ## 2.6.1 - 2026-03-25
 
 ### Changed
