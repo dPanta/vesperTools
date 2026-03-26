@@ -1,3 +1,16 @@
+## 2.8.0 - 2026-03-26
+
+### Changed
+- Reworked the Bags and Bank category section layout so smaller categories can wrap side by side instead of always consuming a full-width row.
+- Added a Bags-window layout edit mode with a cog button, draggable category headers, and saved category spans/order so sections can be rearranged directly in the window.
+- Polished Bags layout edit mode with a stronger category outline, slightly more vertical spacing between category rows, and cleaner section backgrounds while organizing layouts.
+
+### Fixed
+- Removed the stray horizontal divider lines inside bag category containers that were reading like misplaced separators instead of useful group boundaries.
+
+### Notes
+- This minor release focuses on making sparse category sets use space more efficiently while adding direct category organization controls to the Bags window.
+
 ## 2.7.0 - 2026-03-25
 
 ### Changed

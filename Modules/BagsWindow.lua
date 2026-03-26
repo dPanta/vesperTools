@@ -9,7 +9,7 @@ local MIN_WINDOW_WIDTH = 480
 local MIN_WINDOW_HEIGHT = 220
 local DEFAULT_BUTTON_SIZE = 38
 local BUTTON_GAP = 6
-local SECTION_GAP = 10
+local SECTION_GAP = 12
 local HEADER_HEIGHT = 28
 local SUMMARY_GAP = 14
 local CONTENT_SIDE_PADDING = 8
@@ -31,10 +31,13 @@ local TITLEBAR_SEARCH_CLEAR_BUTTON_SIZE = 14
 local TITLEBAR_SEARCH_GROUP_OFFSET_X = -14
 local GUILD_LOOKUP_BUTTON_SIZE = 22
 local GUILD_LOOKUP_BUTTON_GAP = 6
+local TITLEBAR_BUTTON_GAP = 4
+local LAYOUT_EDIT_BUTTON_SIZE = 20
 local CATEGORY_TOGGLE_BUTTON_SIZE = 14
 local CHARACTER_DROPDOWN_ARROW_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\DropdownArrow-50"
 local GUILD_LOOKUP_ICON_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\GuildLookupChest-64"
 local GUILD_LOOKUP_ICON_DISABLED_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\GuildLookupChest-64-Disabled"
+local LAYOUT_EDIT_ICON_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\Cogwheel-64"
 local GUILD_LOOKUP_RESULT_ROW_HEIGHT = 22
 local GUILD_LOOKUP_RESULT_MAX_VISIBLE_ROWS = 8
 local SECTION_TITLE_GAP = 4
@@ -48,6 +51,8 @@ local CURRENCY_BAR_BUTTON_MIN_WIDTH = 46
 local CURRENCY_BAR_BUTTON_MAX_WIDTH = 96
 local CURRENCY_BAR_ICON_SIZE = 16
 local CURRENCY_BAR_ICON_GAP = 6
+local LAYOUT_EDIT_SECTION_BACKGROUND_ALPHA = 0.14
+local LAYOUT_EDIT_SECTION_BORDER_ALPHA = 0.32
 local EQUIPPED_BAG_IDS = {}
 local REAGENT_BAG_ID = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag or nil
 
@@ -210,6 +215,14 @@ function BagsWindow:OnInitialize()
     self.guildLookupResultsScrollFrame = nil
     self.guildLookupResultsContent = nil
     self.guildLookupResultRows = {}
+    self.layoutEditButton = nil
+    self.layoutEditMode = false
+    self.layoutPreviewFrame = nil
+    self.layoutPreviewTitle = nil
+    self.layoutGhostFrame = nil
+    self.layoutGhostTitle = nil
+    self.layoutDragDriver = nil
+    self.layoutDragState = nil
     self.characterDropdown = nil
     self.characterDropdownText = nil
     self.characterDropdownMatchText = nil
@@ -240,6 +253,13 @@ function BagsWindow:OnInitialize()
     self.characterSearchMatchCounts = nil
     self.currentDisplayCharacter = nil
     self.currentSnapshot = nil
+    self.currentLayoutGroups = nil
+    self.currentSectionLayout = nil
+    self.currentSectionLayoutByKey = {}
+    self.currentLayoutColumns = nil
+    self.currentContentWidth = nil
+    self.currentViewSettings = nil
+    self.visibleSectionFramesByCategoryKey = {}
     self.newItemGlowKeysSeen = {}
     self.pendingSecureItemRefresh = false
 end
@@ -873,6 +893,130 @@ function BagsWindow:ToggleCategoryCollapsed(characterKey, categoryKey)
     self:RefreshWindow()
 end
 
+function BagsWindow:GetCategoryLayoutTable(create)
+    local bagsProfile = vesperTools:GetBagsProfile()
+    if not bagsProfile then
+        return nil
+    end
+
+    bagsProfile.display = bagsProfile.display or {}
+    if create and type(bagsProfile.display.categoryLayout) ~= "table" then
+        bagsProfile.display.categoryLayout = {}
+    end
+
+    return type(bagsProfile.display.categoryLayout) == "table" and bagsProfile.display.categoryLayout or nil
+end
+
+function BagsWindow:GetCategoryLayoutEntry(categoryKey, create)
+    if type(categoryKey) ~= "string" or categoryKey == "" then
+        return nil
+    end
+
+    local layoutTable = self:GetCategoryLayoutTable(create)
+    if not layoutTable then
+        return nil
+    end
+
+    local entry = layoutTable[categoryKey]
+    if create and type(entry) ~= "table" then
+        entry = {}
+        layoutTable[categoryKey] = entry
+    elseif type(entry) ~= "table" then
+        return nil
+    end
+
+    if entry.order ~= nil then
+        local order = math.floor((tonumber(entry.order) or 0) + 0.5)
+        entry.order = order > 0 and order or nil
+    end
+
+    if entry.span ~= nil then
+        local span = math.floor((tonumber(entry.span) or 0) + 0.5)
+        entry.span = span > 0 and span or nil
+    end
+
+    return entry
+end
+
+function BagsWindow:HasCustomCategoryLayout(groups)
+    local layoutTable = self:GetCategoryLayoutTable(false)
+    if type(layoutTable) ~= "table" then
+        return false
+    end
+
+    if type(groups) == "table" and #groups > 0 then
+        for i = 1, #groups do
+            local category = groups[i].category
+            if category and type(layoutTable[category.key]) == "table" then
+                return true
+            end
+        end
+        return false
+    end
+
+    return next(layoutTable) ~= nil
+end
+
+function BagsWindow:ResetCategoryLayout()
+    local layoutTable = self:GetCategoryLayoutTable(false)
+    if layoutTable then
+        wipe(layoutTable)
+    end
+
+    self.layoutEditMode = false
+    self:StopCategoryDrag(false)
+    if self.frame and self.frame:IsShown() then
+        self:RefreshWindow()
+    else
+        self:UpdateLayoutEditButtonVisual(false)
+    end
+end
+
+function BagsWindow:SetLayoutEditMode(isActive)
+    local active = isActive and true or false
+    if self.layoutEditMode == active then
+        self:UpdateLayoutEditButtonVisual(active)
+        return
+    end
+
+    if not active then
+        self:StopCategoryDrag(false)
+    end
+
+    self.layoutEditMode = active
+    if self.frame and self.frame:IsShown() then
+        self:RefreshWindow()
+    else
+        self:UpdateLayoutEditButtonVisual(active)
+    end
+end
+
+function BagsWindow:ToggleLayoutEditMode()
+    self:SetLayoutEditMode(not self.layoutEditMode)
+end
+
+function BagsWindow:UpdateLayoutEditButtonVisual(isActive)
+    if not self.layoutEditButton then
+        return
+    end
+
+    local active = isActive and true or false
+    self.layoutEditButton:SetBackdropColor(0.08, 0.08, 0.1, active and 0.98 or 0.92)
+    self.layoutEditButton:SetBackdropBorderColor(active and 0.55 or 1, active and 0.84 or 1, active and 1 or 1, active and 0.42 or 0.12)
+    if self.layoutEditButton.vgIconTexture then
+        self.layoutEditButton.vgIconTexture:SetVertexColor(active and 0.94 or 1, active and 0.98 or 1, active and 1 or 1, active and 1 or 0.92)
+    end
+end
+
+function BagsWindow:ConfigureLayoutEditButtonTooltip(button)
+    GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Arrange Categories", 1, 1, 1)
+    GameTooltip:AddLine(self.layoutEditMode and "Layout edit mode is active." or "Left-click to edit the bag category layout.", 0.85, 0.85, 0.85, true)
+    GameTooltip:AddLine("Drag a category header to move it. Dropping into a tighter spot will resize it to fit.", 0.62, 0.84, 1, true)
+    GameTooltip:AddLine("Shift-right-click resets the custom layout.", 0.85, 0.82, 0.52, true)
+    GameTooltip:Show()
+end
+
 function BagsWindow:GetViewSettings()
     local bagsProfile = vesperTools:GetBagsProfile()
     local display = bagsProfile and bagsProfile.display or nil
@@ -1033,6 +1177,8 @@ function BagsWindow:ApplyConfiguredFonts()
     applyConfiguredFontIfPresent(self.guildLookupResultsStatus, 11, "")
     applyConfiguredFontIfPresent(self.sectionTitleMeasureText, 14, "")
     applyConfiguredFontIfPresent(self.currencyBarMeasureText, 11, "")
+    applyConfiguredFontIfPresent(self.layoutPreviewTitle, 14, "")
+    applyConfiguredFontIfPresent(self.layoutGhostTitle, 14, "")
 
     if self.guildLookupResultsHeaders then
         applyConfiguredFontIfPresent(self.guildLookupResultsHeaders.item, 11, "")
@@ -2005,6 +2151,33 @@ function BagsWindow:CreateWindow()
     })
     closeButton:SetPoint("RIGHT", -6, 0)
 
+    local layoutEditButton = vesperTools:CreateModernCloseButton(titlebar, function(_, mouseButton)
+        if mouseButton == "RightButton" and IsShiftKeyDown and IsShiftKeyDown() then
+            self:ResetCategoryLayout()
+            return
+        end
+
+        self:ToggleLayoutEditMode()
+    end, {
+        size = LAYOUT_EDIT_BUTTON_SIZE,
+        iconScale = 0.7,
+        backgroundAlpha = 0.04,
+        borderAlpha = 0.08,
+        hoverAlpha = 0.12,
+        pressedAlpha = 0.18,
+        iconTexture = LAYOUT_EDIT_ICON_TEXTURE,
+        clicks = { "LeftButtonUp", "RightButtonUp" },
+    })
+    layoutEditButton:SetPoint("RIGHT", closeButton, "LEFT", -TITLEBAR_BUTTON_GAP, 0)
+    layoutEditButton:HookScript("OnEnter", function(selfButton)
+        self:ConfigureLayoutEditButtonTooltip(selfButton)
+    end)
+    layoutEditButton:HookScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    self.layoutEditButton = layoutEditButton
+    self:UpdateLayoutEditButtonVisual(false)
+
     local navFrame = CreateFrame("Frame", nil, frame)
     navFrame:SetHeight(28)
     navFrame:SetPoint("TOPLEFT", titlebar, "BOTTOMLEFT", 10, -8)
@@ -2191,9 +2364,12 @@ function BagsWindow:CreateWindow()
 
     self.frame = frame
     frame:SetScript("OnHide", function()
+        self.layoutEditMode = false
+        self:StopCategoryDrag(false)
         self:HideCharacterMenu()
         self:HideBagSlotsMenu()
         self:ClearSearch()
+        self:UpdateLayoutEditButtonVisual(false)
         self:RefreshGuildLookupPresentation()
     end)
     self:UpdateSearchPlaceholder()
@@ -2225,6 +2401,12 @@ function BagsWindow:BuildLayoutGroups(store, characterKey, categories, viewSetti
     return groups, maxItemCount
 end
 
+function BagsWindow:GetSlotPitch(viewSettings)
+    local itemIconSize = viewSettings and viewSettings.itemIconSize or DEFAULT_BUTTON_SIZE
+    local buttonGap = viewSettings and viewSettings.buttonGap or BUTTON_GAP
+    return itemIconSize + buttonGap
+end
+
 function BagsWindow:GetSectionTitleMeasureText()
     if self.sectionTitleMeasureText then
         return self.sectionTitleMeasureText
@@ -2238,59 +2420,167 @@ function BagsWindow:GetSectionTitleMeasureText()
     return measureText
 end
 
-function BagsWindow:GetMinimumSectionContentWidth(groups)
-    if type(groups) ~= "table" or #groups == 0 then
+function BagsWindow:GetSectionTitleText(group)
+    local category = group and group.category
+    if not category then
+        return ""
+    end
+
+    if group.hidden then
+        return string.format("%s (%d) (%s)", category.label, category.count, L["BAGS_HIDDEN"])
+    end
+
+    return string.format("%s (%d)", category.label, category.count)
+end
+
+function BagsWindow:GetSectionTitleContentWidth(group)
+    if type(group) ~= "table" then
         return 0
     end
 
     local measureText = self:GetSectionTitleMeasureText()
     vesperTools:ApplyConfiguredFont(measureText, 14, "")
+    measureText:SetText(self:GetSectionTitleText(group))
 
-    local widestTitleWidth = 0
-    for i = 1, #groups do
-        local category = groups[i].category
-        if category then
-            local titleText
-            if groups[i].hidden then
-                titleText = string.format("%s (%d) (%s)", category.label, category.count, L["BAGS_HIDDEN"])
-            else
-                titleText = string.format("%s (%d)", category.label, category.count)
-            end
-
-            measureText:SetText(titleText)
-            widestTitleWidth = math.max(widestTitleWidth, math.ceil(measureText:GetStringWidth() or 0))
-        end
-    end
-
-    return (CONTENT_SIDE_PADDING * 2)
-        + CATEGORY_TOGGLE_BUTTON_SIZE
+    return CATEGORY_TOGGLE_BUTTON_SIZE
         + SECTION_TITLE_GAP
-        + widestTitleWidth
+        + math.ceil(measureText:GetStringWidth() or 0)
         + SECTION_TITLE_RIGHT_PADDING
 end
 
-function BagsWindow:MeasureContentHeight(groups, columns, viewSettings, hasSummary)
-    local itemIconSize = viewSettings and viewSettings.itemIconSize or DEFAULT_BUTTON_SIZE
+function BagsWindow:GetMinimumSectionSpan(group, columns, viewSettings)
     local buttonGap = viewSettings and viewSettings.buttonGap or BUTTON_GAP
-    local height = 8
+    local slotPitch = self:GetSlotPitch(viewSettings)
+    local minimumSpan = math.max(1, math.ceil((self:GetSectionTitleContentWidth(group) + buttonGap) / slotPitch))
+    return clamp(minimumSpan, 1, math.max(1, columns or 1))
+end
 
-    if hasSummary then
-        height = height + itemIconSize + SUMMARY_GAP
-    end
+function BagsWindow:GetDefaultSectionSpan(group, columns, viewSettings, minimumSpan)
+    local itemCount = type(group) == "table" and type(group.items) == "table" and #group.items or 0
+    local naturalSpan = math.max(1, math.min(columns or 1, itemCount > 0 and itemCount or 1))
+    return clamp(math.max(minimumSpan or 1, naturalSpan), 1, math.max(1, columns or 1))
+end
 
-    if #groups == 0 then
-        return height + 28
+function BagsWindow:PrepareLayoutGroups(groups, columns, viewSettings)
+    if type(groups) ~= "table" or #groups == 0 then
+        return groups or {}
     end
 
     for i = 1, #groups do
-        height = height + HEADER_HEIGHT
-        if not groups[i].hidden then
-            local itemCount = #groups[i].items
-            local rows = math.max(1, math.ceil(itemCount / columns))
-            height = height + (rows * itemIconSize)
-            height = height + (math.max(0, rows - 1) * buttonGap)
+        local group = groups[i]
+        group.sourceOrder = i
+
+        local layoutEntry = group.category and self:GetCategoryLayoutEntry(group.category.key, false) or nil
+        local minimumSpan = self:GetMinimumSectionSpan(group, columns, viewSettings)
+        group.minSpan = minimumSpan
+        group.defaultSpan = self:GetDefaultSectionSpan(group, columns, viewSettings, minimumSpan)
+
+        local savedOrder = layoutEntry and math.floor((tonumber(layoutEntry.order) or 0) + 0.5) or nil
+        local savedSpan = layoutEntry and math.floor((tonumber(layoutEntry.span) or 0) + 0.5) or nil
+        group.layoutOrder = savedOrder and savedOrder > 0 and savedOrder or nil
+        group.savedSpan = savedSpan and savedSpan > 0 and savedSpan or nil
+    end
+
+    table.sort(groups, function(a, b)
+        local aOrder = a.layoutOrder or (100000 + (a.sourceOrder or 0))
+        local bOrder = b.layoutOrder or (100000 + (b.sourceOrder or 0))
+        if aOrder ~= bOrder then
+            return aOrder < bOrder
         end
-        height = height + SECTION_GAP
+
+        return (a.sourceOrder or 0) < (b.sourceOrder or 0)
+    end)
+
+    for i = 1, #groups do
+        local group = groups[i]
+        group.span = clamp(group.savedSpan or group.defaultSpan or 1, group.minSpan or 1, math.max(1, columns or 1))
+    end
+
+    return groups
+end
+
+function BagsWindow:GetSectionFrameWidth(group, viewSettings)
+    if type(group) ~= "table" then
+        return 0
+    end
+
+    local itemIconSize = viewSettings and viewSettings.itemIconSize or DEFAULT_BUTTON_SIZE
+    local buttonGap = viewSettings and viewSettings.buttonGap or BUTTON_GAP
+    local span = math.max(1, math.floor((tonumber(group.span) or 1) + 0.5))
+    return (span * itemIconSize) + (math.max(0, span - 1) * buttonGap)
+end
+
+function BagsWindow:GetMinimumSectionContentWidth(groups, viewSettings)
+    if type(groups) ~= "table" or #groups == 0 then
+        return 0
+    end
+
+    local widestSectionWidth = 0
+    for i = 1, #groups do
+        widestSectionWidth = math.max(widestSectionWidth, self:GetSectionFrameWidth(groups[i], viewSettings))
+    end
+
+    return (CONTENT_SIDE_PADDING * 2) + widestSectionWidth
+end
+
+function BagsWindow:BuildSectionLayout(groups, contentWidth, columns, viewSettings)
+    if type(groups) ~= "table" or #groups == 0 then
+        return {}, 0
+    end
+
+    local itemIconSize = viewSettings and viewSettings.itemIconSize or DEFAULT_BUTTON_SIZE
+    local buttonGap = viewSettings and viewSettings.buttonGap or BUTTON_GAP
+    local slotPitch = self:GetSlotPitch(viewSettings)
+    local placements = {}
+    local rowColumn = 0
+    local rowTop = 8
+    local rowHeight = 0
+
+    for i = 1, #groups do
+        local group = groups[i]
+        local span = clamp(math.max(1, tonumber(group.span) or 1), 1, math.max(1, columns or 1))
+        group.span = span
+
+        local rows = not group.hidden and math.max(1, math.ceil(#group.items / span)) or 0
+        local itemHeight = rows > 0 and ((rows * itemIconSize) + (math.max(0, rows - 1) * buttonGap)) or 0
+        local sectionWidth = self:GetSectionFrameWidth(group, viewSettings)
+        local sectionHeight = HEADER_HEIGHT + itemHeight
+
+        if rowColumn > 0 and (rowColumn + span) > columns then
+            rowTop = rowTop + rowHeight + SECTION_GAP
+            rowColumn = 0
+            rowHeight = 0
+        end
+
+        placements[i] = {
+            x = CONTENT_SIDE_PADDING + (rowColumn * slotPitch),
+            y = -rowTop,
+            width = sectionWidth,
+            height = sectionHeight,
+            columns = span,
+            startColumn = rowColumn + 1,
+            endColumn = rowColumn + span,
+        }
+
+        rowColumn = rowColumn + span
+        rowHeight = math.max(rowHeight, sectionHeight)
+    end
+
+    return placements, rowTop + rowHeight
+end
+
+function BagsWindow:MeasureContentHeight(groups, sectionsHeight, viewSettings, hasSummary)
+    local itemIconSize = viewSettings and viewSettings.itemIconSize or DEFAULT_BUTTON_SIZE
+    local height
+
+    if type(groups) ~= "table" or #groups == 0 then
+        height = 8 + 28
+    else
+        height = sectionsHeight or 0
+    end
+
+    if hasSummary then
+        height = height + itemIconSize + SUMMARY_GAP
     end
 
     return height + 12
@@ -2304,34 +2594,46 @@ function BagsWindow:ResolveAutoLayout(groups, maxItemCount, viewSettings, curren
     local buttonGap = viewSettings and viewSettings.buttonGap or BUTTON_GAP
     local configuredColumns = viewSettings and viewSettings.columns or 10
     local maxColumns = math.max(1, math.floor((maxContentWidth - (CONTENT_SIDE_PADDING * 2) + buttonGap) / (itemIconSize + buttonGap)))
-    local desiredColumns = maxItemCount > 0 and math.min(configuredColumns, maxItemCount) or 1
-    local columns = clamp(desiredColumns, 1, maxColumns)
+    local columns = clamp(configuredColumns, 1, maxColumns)
+    local preparedGroups = self:PrepareLayoutGroups(groups, columns, viewSettings)
 
     local gridWidth = (CONTENT_SIDE_PADDING * 2) + (columns * itemIconSize) + (math.max(0, columns - 1) * buttonGap)
     local summaryWidth = (CONTENT_SIDE_PADDING * 2) + (itemIconSize * 2) + buttonGap
-    local sectionWidth = self:GetMinimumSectionContentWidth(groups)
+    local sectionWidth = self:GetMinimumSectionContentWidth(preparedGroups, viewSettings)
     local contentWidth = math.max(gridWidth, summaryWidth, sectionWidth)
-    local contentHeight = self:MeasureContentHeight(groups, columns, viewSettings, true)
     local desiredWidth = math.max(MIN_WINDOW_WIDTH, contentWidth + 20)
-    local desiredHeight = WINDOW_CHROME_HEIGHT + contentHeight
     local frameWidth = clamp(desiredWidth, MIN_WINDOW_WIDTH, maxFrameWidth)
+    contentWidth = math.max(contentWidth, frameWidth - 32)
+    local sectionLayout, sectionsHeight = self:BuildSectionLayout(preparedGroups, contentWidth, columns, viewSettings)
+    local contentHeight = self:MeasureContentHeight(preparedGroups, sectionsHeight, viewSettings, true)
+    local desiredHeight = WINDOW_CHROME_HEIGHT + contentHeight
     local currencyBarLayout = self:GetCurrencyBarLayout(frameWidth - 20, currencyEntries)
     local frameHeight = math.max(MIN_WINDOW_HEIGHT, desiredHeight + currencyBarLayout.height)
 
     return {
+        groups = preparedGroups,
         columns = columns,
         contentWidth = contentWidth,
         contentHeight = contentHeight,
         frameWidth = frameWidth,
         frameHeight = frameHeight,
+        sectionLayout = sectionLayout,
+        sectionsHeight = sectionsHeight,
         currencyBarLayout = currencyBarLayout,
     }
 end
 
 function BagsWindow:AcquireSectionFrame()
     local index = #self.sectionFrames + 1
-    local section = CreateFrame("Frame", nil, self.content)
+    local section = CreateFrame("Frame", nil, self.content, "BackdropTemplate")
     section:SetHeight(HEADER_HEIGHT)
+    section:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    section:SetBackdropColor(0.12, 0.18, 0.26, 0)
+    section:SetBackdropBorderColor(0.55, 0.84, 1, 0)
 
     local toggleButton = CreateFrame("Button", nil, section)
     toggleButton:SetPoint("TOPLEFT", section, "TOPLEFT", 0, -2)
@@ -2348,6 +2650,24 @@ function BagsWindow:AcquireSectionFrame()
     toggleButton.icon = toggleIcon
     section.toggleButton = toggleButton
 
+    local dragOverlay = CreateFrame("Button", nil, section)
+    dragOverlay:SetPoint("TOPLEFT", toggleButton, "TOPRIGHT", 2, 0)
+    dragOverlay:SetPoint("TOPRIGHT", section, "TOPRIGHT", 0, 0)
+    dragOverlay:SetHeight(HEADER_HEIGHT)
+    dragOverlay:RegisterForDrag("LeftButton")
+    dragOverlay:SetHighlightTexture("Interface\\Buttons\\WHITE8x8", "ADD")
+    dragOverlay:GetHighlightTexture():SetVertexColor(0.36, 0.66, 1, 0.12)
+    dragOverlay.window = self
+    dragOverlay:EnableMouse(false)
+    dragOverlay:SetScript("OnDragStart", function(selfButton)
+        local window = selfButton.window
+        local parentSection = selfButton:GetParent()
+        if window and window.layoutEditMode and parentSection and parentSection.categoryKey then
+            window:StartCategoryDrag(parentSection.categoryKey)
+        end
+    end)
+    section.dragOverlay = dragOverlay
+
     local title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", toggleButton, "TOPRIGHT", 4, 1)
     title:SetPoint("RIGHT", section, "RIGHT", 0, 0)
@@ -2356,15 +2676,336 @@ function BagsWindow:AcquireSectionFrame()
     vesperTools:ApplyConfiguredFont(title, 14, "")
     section.title = title
 
-    local divider = section:CreateTexture(nil, "BACKGROUND")
-    divider:SetHeight(1)
-    divider:SetPoint("LEFT", section, "LEFT", 0, -20)
-    divider:SetPoint("RIGHT", section, "RIGHT", 0, -20)
-    divider:SetColorTexture(1, 1, 1, 0.08)
-    section.divider = divider
-
     self.sectionFrames[index] = section
     return section
+end
+
+function BagsWindow:EnsureLayoutDragFrames()
+    if self.layoutPreviewFrame and self.layoutGhostFrame and self.layoutDragDriver then
+        return
+    end
+
+    local previewFrame = CreateFrame("Frame", nil, self.content, "BackdropTemplate")
+    previewFrame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    previewFrame:SetBackdropColor(0.16, 0.26, 0.38, 0.18)
+    previewFrame:SetBackdropBorderColor(0.55, 0.84, 1, 0.5)
+    previewFrame:SetFrameLevel((self.content:GetFrameLevel() or 0) + 24)
+    previewFrame:Hide()
+    self.layoutPreviewFrame = previewFrame
+
+    local previewTitle = previewFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    previewTitle:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", CATEGORY_TOGGLE_BUTTON_SIZE + SECTION_TITLE_GAP + 4, -4)
+    previewTitle:SetPoint("RIGHT", previewFrame, "RIGHT", -6, 0)
+    previewTitle:SetJustifyH("LEFT")
+    previewTitle:SetWordWrap(false)
+    vesperTools:ApplyConfiguredFont(previewTitle, 14, "")
+    self.layoutPreviewTitle = previewTitle
+
+    local ghostFrame = CreateFrame("Frame", nil, self.content, "BackdropTemplate")
+    ghostFrame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    ghostFrame:SetBackdropColor(0.14, 0.22, 0.3, 0.72)
+    ghostFrame:SetBackdropBorderColor(0.55, 0.84, 1, 0.42)
+    ghostFrame:SetFrameLevel((self.content:GetFrameLevel() or 0) + 26)
+    ghostFrame:Hide()
+    self.layoutGhostFrame = ghostFrame
+
+    local ghostTitle = ghostFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    ghostTitle:SetPoint("TOPLEFT", ghostFrame, "TOPLEFT", CATEGORY_TOGGLE_BUTTON_SIZE + SECTION_TITLE_GAP + 4, -4)
+    ghostTitle:SetPoint("RIGHT", ghostFrame, "RIGHT", -6, 0)
+    ghostTitle:SetJustifyH("LEFT")
+    ghostTitle:SetWordWrap(false)
+    vesperTools:ApplyConfiguredFont(ghostTitle, 14, "")
+    self.layoutGhostTitle = ghostTitle
+
+    local dragDriver = CreateFrame("Frame", nil, self.frame)
+    dragDriver:SetAllPoints(self.frame)
+    dragDriver:Hide()
+    dragDriver:SetScript("OnUpdate", function()
+        self:UpdateCategoryDrag()
+    end)
+    self.layoutDragDriver = dragDriver
+end
+
+function BagsWindow:CloneLayoutGroup(group)
+    if type(group) ~= "table" then
+        return nil
+    end
+
+    local clone = {}
+    for key, value in pairs(group) do
+        clone[key] = value
+    end
+    return clone
+end
+
+function BagsWindow:BuildCandidateGroupList(baseGroups, draggedGroup, insertIndex, span)
+    local candidateGroups = {}
+
+    for i = 1, (#baseGroups + 1) do
+        if i == insertIndex then
+            local inserted = self:CloneLayoutGroup(draggedGroup)
+            inserted.span = span
+            candidateGroups[#candidateGroups + 1] = inserted
+        end
+
+        local source = baseGroups[i > insertIndex and (i - 1) or i]
+        if source then
+            candidateGroups[#candidateGroups + 1] = self:CloneLayoutGroup(source)
+        end
+    end
+
+    return candidateGroups
+end
+
+function BagsWindow:GetCursorPositionInContent()
+    if not self.content then
+        return nil
+    end
+
+    local left = self.content:GetLeft()
+    local top = self.content:GetTop()
+    local scale = self.content:GetEffectiveScale()
+    if not left or not top or not scale or scale == 0 then
+        return nil
+    end
+
+    local cursorX, cursorY = GetCursorPosition()
+    cursorX = cursorX / scale
+    cursorY = cursorY / scale
+    return cursorX - left, top - cursorY
+end
+
+function BagsWindow:GetLayoutCandidateScore(placement, cursorX, cursorY)
+    if type(placement) ~= "table" then
+        return math.huge
+    end
+
+    local left = placement.x or 0
+    local right = left + (placement.width or 0)
+    local top = -(placement.y or 0)
+    local bottom = top + (placement.height or 0)
+
+    local outsideX = 0
+    if cursorX < left then
+        outsideX = left - cursorX
+    elseif cursorX > right then
+        outsideX = cursorX - right
+    end
+
+    local outsideY = 0
+    if cursorY < top then
+        outsideY = top - cursorY
+    elseif cursorY > bottom then
+        outsideY = cursorY - bottom
+    end
+
+    local centerX = left + ((placement.width or 0) * 0.5)
+    local centerY = top + ((placement.height or 0) * 0.5)
+    local centerDistance = ((centerX - cursorX) * (centerX - cursorX)) + ((centerY - cursorY) * (centerY - cursorY))
+    local outsideDistance = ((outsideX * outsideX) + (outsideY * outsideY)) * 10000
+    return outsideDistance + centerDistance
+end
+
+function BagsWindow:BuildBestLayoutDropCandidate(cursorX, cursorY)
+    local dragState = self.layoutDragState
+    local groups = self.currentLayoutGroups
+    local columns = self.currentLayoutColumns
+    local viewSettings = self.currentViewSettings
+    if not dragState or type(groups) ~= "table" or not columns or not viewSettings then
+        return nil
+    end
+
+    local draggedGroup = nil
+    local baseGroups = {}
+    for i = 1, #groups do
+        local group = groups[i]
+        if group.category and group.category.key == dragState.categoryKey then
+            draggedGroup = self:CloneLayoutGroup(group)
+        else
+            baseGroups[#baseGroups + 1] = self:CloneLayoutGroup(group)
+        end
+    end
+
+    if not draggedGroup then
+        return nil
+    end
+
+    local minimumSpan = math.max(1, draggedGroup.minSpan or 1)
+    local bestCandidate = nil
+    local bestScore = nil
+
+    for insertIndex = 1, (#baseGroups + 1) do
+        for span = minimumSpan, columns do
+            local candidateGroups = self:BuildCandidateGroupList(baseGroups, draggedGroup, insertIndex, span)
+            local sectionLayout, sectionsHeight = self:BuildSectionLayout(candidateGroups, self.currentContentWidth, columns, viewSettings)
+            local placement = sectionLayout[insertIndex]
+            local score = self:GetLayoutCandidateScore(placement, cursorX, cursorY)
+            if not bestScore or score < bestScore then
+                bestScore = score
+                bestCandidate = {
+                    groups = candidateGroups,
+                    placement = placement,
+                    sectionsHeight = sectionsHeight,
+                    span = span,
+                    insertIndex = insertIndex,
+                    columns = columns,
+                }
+            end
+        end
+    end
+
+    return bestCandidate
+end
+
+function BagsWindow:ApplyCategoryLayoutCandidate(candidate)
+    if type(candidate) ~= "table" or type(candidate.groups) ~= "table" then
+        return
+    end
+
+    local columns = math.max(1, math.floor((tonumber(candidate.columns) or 1) + 0.5))
+    for i = 1, #candidate.groups do
+        local group = candidate.groups[i]
+        if group and group.category and group.category.key then
+            local entry = self:GetCategoryLayoutEntry(group.category.key, true)
+            if entry then
+                entry.order = i
+                entry.span = clamp(math.floor((tonumber(group.span) or 1) + 0.5), math.max(1, group.minSpan or 1), columns)
+            end
+        end
+    end
+
+    if self.frame and self.frame:IsShown() then
+        self:RefreshWindow()
+    end
+end
+
+function BagsWindow:StartCategoryDrag(categoryKey)
+    if not self.layoutEditMode or type(categoryKey) ~= "string" or categoryKey == "" then
+        return
+    end
+
+    local sourcePlacement = self.currentSectionLayoutByKey and self.currentSectionLayoutByKey[categoryKey] or nil
+    local sourceSection = self.visibleSectionFramesByCategoryKey and self.visibleSectionFramesByCategoryKey[categoryKey] or nil
+    local sourceGroup = nil
+    if type(self.currentLayoutGroups) == "table" then
+        for i = 1, #self.currentLayoutGroups do
+            local group = self.currentLayoutGroups[i]
+            if group.category and group.category.key == categoryKey then
+                sourceGroup = group
+                break
+            end
+        end
+    end
+
+    if not sourcePlacement or not sourceGroup then
+        return
+    end
+
+    self:EnsureLayoutDragFrames()
+
+    local cursorX, cursorY = self:GetCursorPositionInContent()
+    if not cursorX or not cursorY then
+        return
+    end
+
+    self.layoutDragState = {
+        categoryKey = categoryKey,
+        sourcePlacement = sourcePlacement,
+        sourceGroup = self:CloneLayoutGroup(sourceGroup),
+        sourceSection = sourceSection,
+        grabOffsetX = cursorX - (sourcePlacement.x or 0),
+        grabOffsetY = cursorY - (-(sourcePlacement.y or 0)),
+        candidate = nil,
+    }
+
+    if self.layoutGhostFrame then
+        self.layoutGhostFrame:SetSize(sourcePlacement.width or 1, sourcePlacement.height or HEADER_HEIGHT)
+        self.layoutGhostTitle:SetText(self:GetSectionTitleText(sourceGroup))
+        self.layoutGhostFrame:Show()
+    end
+
+    if self.layoutPreviewTitle then
+        self.layoutPreviewTitle:SetText(self:GetSectionTitleText(sourceGroup))
+    end
+
+    if self.layoutDragDriver then
+        self.layoutDragDriver:Show()
+    end
+
+    self:UpdateCategoryDrag()
+end
+
+function BagsWindow:UpdateCategoryDrag()
+    local dragState = self.layoutDragState
+    if not dragState then
+        return
+    end
+
+    if not (IsMouseButtonDown and IsMouseButtonDown("LeftButton")) then
+        self:StopCategoryDrag(true)
+        return
+    end
+
+    local cursorX, cursorY = self:GetCursorPositionInContent()
+    if not cursorX or not cursorY then
+        return
+    end
+
+    local candidate = self:BuildBestLayoutDropCandidate(cursorX, cursorY)
+    dragState.candidate = candidate
+
+    if self.layoutGhostFrame then
+        self.layoutGhostFrame:ClearAllPoints()
+        self.layoutGhostFrame:SetPoint(
+            "TOPLEFT",
+            self.content,
+            "TOPLEFT",
+            cursorX - (dragState.grabOffsetX or 0),
+            -(cursorY - (dragState.grabOffsetY or 0))
+        )
+        self.layoutGhostFrame:Show()
+    end
+
+    if self.layoutPreviewFrame and candidate and candidate.placement then
+        self.layoutPreviewFrame:ClearAllPoints()
+        self.layoutPreviewFrame:SetPoint("TOPLEFT", self.content, "TOPLEFT", candidate.placement.x or CONTENT_SIDE_PADDING, candidate.placement.y or -8)
+        self.layoutPreviewFrame:SetSize(candidate.placement.width or 1, candidate.placement.height or HEADER_HEIGHT)
+        self.layoutPreviewTitle:SetText(self:GetSectionTitleText(dragState.sourceGroup))
+        self.layoutPreviewFrame:Show()
+    elseif self.layoutPreviewFrame then
+        self.layoutPreviewFrame:Hide()
+    end
+end
+
+function BagsWindow:StopCategoryDrag(applyDrop)
+    local dragState = self.layoutDragState
+    if not dragState then
+        return
+    end
+
+    self.layoutDragState = nil
+
+    if self.layoutDragDriver then
+        self.layoutDragDriver:Hide()
+    end
+    if self.layoutGhostFrame then
+        self.layoutGhostFrame:Hide()
+    end
+    if self.layoutPreviewFrame then
+        self.layoutPreviewFrame:Hide()
+    end
+
+    if applyDrop and dragState.candidate then
+        self:ApplyCategoryLayoutCandidate(dragState.candidate)
+    end
 end
 
 function BagsWindow:AcquireItemButton()
@@ -2496,6 +3137,12 @@ function BagsWindow:HideAllReusableFrames()
     end
     if self.currencyBar then
         self.currencyBar:Hide()
+    end
+    if self.layoutPreviewFrame then
+        self.layoutPreviewFrame:Hide()
+    end
+    if self.layoutGhostFrame then
+        self.layoutGhostFrame:Hide()
     end
 end
 
@@ -2645,6 +3292,10 @@ function BagsWindow:HandleItemEnter(button)
 end
 
 function BagsWindow:HandleItemDrag(button)
+    if self.layoutEditMode then
+        return
+    end
+
     local itemInteraction = self:GetItemInteraction()
     if itemInteraction then
         itemInteraction:HandleItemDrag(button)
@@ -2671,6 +3322,10 @@ function BagsWindow:ConfigureSummaryTooltip(button)
 end
 
 function BagsWindow:HandleItemClick(button, mouseButton)
+    if self.layoutEditMode then
+        return
+    end
+
     local itemInteraction = self:GetItemInteraction()
     if itemInteraction then
         itemInteraction:HandleItemClick(button, mouseButton)
@@ -2810,18 +3465,30 @@ function BagsWindow:RefreshWindow()
         return
     end
 
+    if self.layoutDragState then
+        self:StopCategoryDrag(false)
+    end
+
     self:CleanupLegacyScrollArtifacts()
     self:ApplyConfiguredFonts()
     wipe(self.newItemGlowKeysSeen)
+    self.currentLayoutGroups = nil
+    self.currentSectionLayout = nil
+    self.currentSectionLayoutByKey = {}
+    self.visibleSectionFramesByCategoryKey = {}
     local viewSettings = self:GetViewSettings()
     self:UpdateBagSlotsButtonVisual(self.bagSlotsMenu and self.bagSlotsMenu:IsShown())
     self:UpdateCombineStacksButtonVisual(viewSettings.combineStacks)
+    self:UpdateLayoutEditButtonVisual(self.layoutEditMode)
     self:RefreshGuildLookupPresentation()
     self:HideAllReusableFrames()
 
     local store = self:GetStore()
     if not store then
         self.characterSearchMatchCounts = nil
+        self.currentLayoutColumns = nil
+        self.currentContentWidth = nil
+        self.currentViewSettings = nil
         return
     end
 
@@ -2847,6 +3514,9 @@ function BagsWindow:RefreshWindow()
         self.frame:SetSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
         self.emptyText:SetWidth(MIN_WINDOW_WIDTH - 60)
         self.content:SetSize(MIN_WINDOW_WIDTH - 32, 40)
+        self.currentLayoutColumns = nil
+        self.currentContentWidth = nil
+        self.currentViewSettings = nil
         self:RefreshGuildLookupPresentation()
         self:SaveWindowState()
         return
@@ -2878,6 +3548,9 @@ function BagsWindow:RefreshWindow()
         self.frame:SetSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
         self.emptyText:SetWidth(MIN_WINDOW_WIDTH - 60)
         self.content:SetSize(MIN_WINDOW_WIDTH - 32, 40)
+        self.currentLayoutColumns = nil
+        self.currentContentWidth = nil
+        self.currentViewSettings = nil
         self:RefreshGuildLookupPresentation()
         self:SaveWindowState()
         return
@@ -2895,14 +3568,21 @@ function BagsWindow:RefreshWindow()
     local groups, maxItemCount = self:BuildLayoutGroups(store, selectedCharacter.key, categories, viewSettings)
     local currencyEntries = self:GetCurrencyBarEntries(selectedCharacter)
     local layout = self:ResolveAutoLayout(groups, maxItemCount, viewSettings, currencyEntries)
+    groups = layout.groups or groups
     local contentWidth = layout.contentWidth
     local columns = layout.columns
-    local slotPitch = viewSettings.itemIconSize + viewSettings.buttonGap
+    local sectionLayout = layout.sectionLayout or {}
+    local slotPitch = self:GetSlotPitch(viewSettings)
     local itemContext = {
         ownerName = selectedCharacter.fullName,
         isInteractive = selectedCharacter.isCurrent and true or false,
         isCurrentCharacter = selectedCharacter.isCurrent and true or false,
     }
+    self.currentLayoutGroups = groups
+    self.currentSectionLayout = sectionLayout
+    self.currentLayoutColumns = columns
+    self.currentContentWidth = contentWidth
+    self.currentViewSettings = viewSettings
     self.frame:SetSize(layout.frameWidth, layout.frameHeight)
     self.emptyText:SetWidth(layout.frameWidth - 60)
     self:SaveWindowState()
@@ -2929,63 +3609,68 @@ function BagsWindow:RefreshWindow()
     for i = 1, #groups do
         local category = groups[i].category
         local items = groups[i].items
+        local placement = sectionLayout[i] or {}
         if #items > 0 then
             sectionIndex = sectionIndex + 1
             local section = self.sectionFrames[sectionIndex] or self:AcquireSectionFrame()
             section:ClearAllPoints()
-            section:SetPoint("TOPLEFT", self.content, "TOPLEFT", 8, yOffset)
-            section:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", -8, yOffset)
+            section:SetPoint("TOPLEFT", self.content, "TOPLEFT", placement.x or CONTENT_SIDE_PADDING, placement.y or -8)
+            section:SetSize(placement.width or math.max(1, contentWidth - (CONTENT_SIDE_PADDING * 2)), placement.height or HEADER_HEIGHT)
+            section.categoryKey = category.key
+            self.currentSectionLayoutByKey[category.key] = placement
+            self.visibleSectionFramesByCategoryKey[category.key] = section
             if groups[i].hidden then
                 section.title:SetText(string.format("%s (%d) (%s)", category.label, category.count, L["BAGS_HIDDEN"]))
                 section.title:SetTextColor(0.8, 0.8, 0.8, 1)
-                section.divider:SetColorTexture(1, 1, 1, 0.05)
                 section.toggleButton.icon:SetRotation(math.pi)
                 section.toggleButton.icon:SetVertexColor(0.8, 0.8, 0.8, 0.98)
             else
                 section.title:SetText(string.format("%s (%d)", category.label, category.count))
                 section.title:SetTextColor(1, 1, 1, 1)
-                section.divider:SetColorTexture(1, 1, 1, 0.08)
                 section.toggleButton.icon:SetRotation(0)
                 section.toggleButton.icon:SetVertexColor(1, 1, 1, 0.98)
             end
             section.toggleButton:SetScript("OnClick", function()
                 self:ToggleCategoryCollapsed(selectedCharacter.key, category.key)
             end)
+            if section.dragOverlay then
+                section.dragOverlay:EnableMouse(self.layoutEditMode)
+                section.dragOverlay:SetShown(self.layoutEditMode)
+            end
+            if self.layoutEditMode then
+                section:SetBackdropColor(0.12, 0.18, 0.26, LAYOUT_EDIT_SECTION_BACKGROUND_ALPHA)
+                section:SetBackdropBorderColor(0.55, 0.84, 1, LAYOUT_EDIT_SECTION_BORDER_ALPHA)
+            else
+                section:SetBackdropColor(0.12, 0.18, 0.26, 0)
+                section:SetBackdropBorderColor(0.55, 0.84, 1, 0)
+            end
             section:Show()
 
-            yOffset = yOffset - HEADER_HEIGHT
             if not groups[i].hidden then
                 local row = 0
                 local column = 0
+                local sectionColumns = math.max(1, placement.columns or math.min(columns, #items))
                 for itemPosition = 1, #items do
                     itemIndex = itemIndex + 1
                     local button = self.itemButtons[itemIndex] or self:AcquireItemButton()
-                    local x = CONTENT_SIDE_PADDING + (column * slotPitch)
-                    local y = yOffset - (row * slotPitch)
+                    local x = column * slotPitch
+                    local y = -HEADER_HEIGHT - (row * slotPitch)
                     button:ClearAllPoints()
-                    button:SetPoint("TOPLEFT", self.content, "TOPLEFT", x, y)
+                    button:SetPoint("TOPLEFT", section, "TOPLEFT", x, y)
                     self:ConfigureItemButton(button, items[itemPosition], itemContext, viewSettings)
 
                     column = column + 1
-                    if column >= columns then
+                    if column >= sectionColumns then
                         column = 0
                         row = row + 1
                     end
                 end
-
-                if column > 0 then
-                    row = row + 1
-                end
-
-                yOffset = yOffset - (row * slotPitch) - SECTION_GAP
-            else
-                yOffset = yOffset - SECTION_GAP
             end
         end
     end
 
     if #groups > 0 then
-        yOffset = yOffset + (SECTION_GAP - SUMMARY_GAP)
+        yOffset = -(layout.sectionsHeight + SUMMARY_GAP)
     end
 
     for i = 1, #emptySlotSummary do

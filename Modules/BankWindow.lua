@@ -35,6 +35,8 @@ local CATEGORY_TOGGLE_BUTTON_SIZE = 14
 local VIEW_DROPDOWN_ARROW_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\DropdownArrow-50"
 local NAV_LEFT_INSET = 10
 local NAV_RIGHT_INSET = 40
+local SECTION_TITLE_GAP = 4
+local SECTION_TITLE_RIGHT_PADDING = 8
 
 local function clamp(value, minValue, maxValue)
     if value < minValue then
@@ -1525,28 +1527,131 @@ function BankWindow:BuildLayoutGroups(store, context, viewSettings)
     return groups, maxItemCount
 end
 
-function BankWindow:MeasureContentHeight(groups, columns, viewSettings, hasSummary)
+function BankWindow:GetSectionTitleMeasureText()
+    if self.sectionTitleMeasureText then
+        return self.sectionTitleMeasureText
+    end
+
+    local parent = self.frame or UIParent
+    local measureText = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    measureText:SetWordWrap(false)
+    measureText:Hide()
+    self.sectionTitleMeasureText = measureText
+    return measureText
+end
+
+function BankWindow:GetSectionTitleText(group)
+    local category = group and group.category
+    if not category then
+        return ""
+    end
+
+    if group.hidden then
+        return string.format("%s (%d) (%s)", category.label, category.count, L["BAGS_HIDDEN"])
+    end
+
+    return string.format("%s (%d)", category.label, category.count)
+end
+
+function BankWindow:GetSectionFrameWidth(group, columns, viewSettings)
+    if type(group) ~= "table" then
+        return 0
+    end
+
     local itemIconSize = viewSettings and viewSettings.itemIconSize or DEFAULT_BUTTON_SIZE
     local buttonGap = viewSettings and viewSettings.buttonGap or BUTTON_GAP
-    local height = 8
+    local measureText = self:GetSectionTitleMeasureText()
+    vesperTools:ApplyConfiguredFont(measureText, 14, "")
+    measureText:SetText(self:GetSectionTitleText(group))
+
+    local titleWidth = CATEGORY_TOGGLE_BUTTON_SIZE
+        + SECTION_TITLE_GAP
+        + math.ceil(measureText:GetStringWidth() or 0)
+        + SECTION_TITLE_RIGHT_PADDING
+    local visibleColumns = 0
+    if not group.hidden and type(group.items) == "table" and #group.items > 0 then
+        visibleColumns = math.max(1, math.min(columns or 1, #group.items))
+    end
+
+    local gridWidth = 0
+    if visibleColumns > 0 then
+        gridWidth = (visibleColumns * itemIconSize) + (math.max(0, visibleColumns - 1) * buttonGap)
+    end
+
+    return math.max(titleWidth, gridWidth)
+end
+
+function BankWindow:GetMinimumSectionContentWidth(groups, columns, viewSettings)
+    if type(groups) ~= "table" or #groups == 0 then
+        return 0
+    end
+
+    local widestSectionWidth = 0
+    for i = 1, #groups do
+        widestSectionWidth = math.max(widestSectionWidth, self:GetSectionFrameWidth(groups[i], columns, viewSettings))
+    end
+
+    return (CONTENT_SIDE_PADDING * 2) + widestSectionWidth
+end
+
+function BankWindow:BuildSectionLayout(groups, contentWidth, columns, viewSettings)
+    if type(groups) ~= "table" or #groups == 0 then
+        return {}, 0
+    end
+
+    local itemIconSize = viewSettings and viewSettings.itemIconSize or DEFAULT_BUTTON_SIZE
+    local buttonGap = viewSettings and viewSettings.buttonGap or BUTTON_GAP
+    local maxRowWidth = math.max(1, (contentWidth or 0) - (CONTENT_SIDE_PADDING * 2))
+    local placements = {}
+    local rowX = 0
+    local rowTop = 8
+    local rowHeight = 0
+
+    for i = 1, #groups do
+        local group = groups[i]
+        local visibleColumns = 0
+        if not group.hidden and type(group.items) == "table" and #group.items > 0 then
+            visibleColumns = math.max(1, math.min(columns or 1, #group.items))
+        end
+
+        local rows = visibleColumns > 0 and math.max(1, math.ceil(#group.items / visibleColumns)) or 0
+        local itemHeight = rows > 0 and ((rows * itemIconSize) + (math.max(0, rows - 1) * buttonGap)) or 0
+        local sectionWidth = math.min(self:GetSectionFrameWidth(group, columns, viewSettings), maxRowWidth)
+        local sectionHeight = HEADER_HEIGHT + itemHeight
+
+        if rowX > 0 and (rowX + sectionWidth) > maxRowWidth then
+            rowTop = rowTop + rowHeight + SECTION_GAP
+            rowX = 0
+            rowHeight = 0
+        end
+
+        placements[i] = {
+            x = CONTENT_SIDE_PADDING + rowX,
+            y = -rowTop,
+            width = sectionWidth,
+            height = sectionHeight,
+            columns = visibleColumns,
+        }
+
+        rowX = rowX + sectionWidth + SECTION_GAP
+        rowHeight = math.max(rowHeight, sectionHeight)
+    end
+
+    return placements, rowTop + rowHeight
+end
+
+function BankWindow:MeasureContentHeight(groups, sectionsHeight, viewSettings, hasSummary)
+    local itemIconSize = viewSettings and viewSettings.itemIconSize or DEFAULT_BUTTON_SIZE
+    local height
+
+    if type(groups) ~= "table" or #groups == 0 then
+        height = 8 + 28
+    else
+        height = sectionsHeight or 0
+    end
 
     if hasSummary then
         height = height + itemIconSize + SUMMARY_GAP
-    end
-
-    if #groups == 0 then
-        return height + 28
-    end
-
-    for i = 1, #groups do
-        height = height + HEADER_HEIGHT
-        if not groups[i].hidden then
-            local itemCount = #groups[i].items
-            local rows = math.max(1, math.ceil(itemCount / columns))
-            height = height + (rows * itemIconSize)
-            height = height + (math.max(0, rows - 1) * buttonGap)
-        end
-        height = height + SECTION_GAP
     end
 
     return height + 12
@@ -1619,13 +1724,15 @@ function BankWindow:ResolveAutoLayout(groups, maxItemCount, viewSettings, viewKe
 
     local gridWidth = (CONTENT_SIDE_PADDING * 2) + (columns * itemIconSize) + (math.max(0, columns - 1) * buttonGap)
     local summaryWidth = (CONTENT_SIDE_PADDING * 2) + itemIconSize
-    local contentWidth = math.max(gridWidth, summaryWidth)
-    local contentHeight = self:MeasureContentHeight(groups, columns, viewSettings, true)
+    local sectionWidth = self:GetMinimumSectionContentWidth(groups, columns, viewSettings)
+    local contentWidth = math.max(gridWidth, summaryWidth, sectionWidth)
     local desiredWidth = math.max(minFrameWidth, contentWidth + 20)
-    local desiredHeight = WINDOW_CHROME_HEIGHT + contentHeight
     local frameWidth = clamp(desiredWidth, minFrameWidth, maxFrameWidth)
-    local frameHeight = math.max(MIN_WINDOW_HEIGHT, desiredHeight)
     contentWidth = math.max(contentWidth, frameWidth - 32)
+    local sectionLayout, sectionsHeight = self:BuildSectionLayout(groups, contentWidth, columns, viewSettings)
+    local contentHeight = self:MeasureContentHeight(groups, sectionsHeight, viewSettings, true)
+    local desiredHeight = WINDOW_CHROME_HEIGHT + contentHeight
+    local frameHeight = math.max(MIN_WINDOW_HEIGHT, desiredHeight)
 
     return {
         columns = columns,
@@ -1633,6 +1740,8 @@ function BankWindow:ResolveAutoLayout(groups, maxItemCount, viewSettings, viewKe
         contentHeight = contentHeight,
         frameWidth = frameWidth,
         frameHeight = frameHeight,
+        sectionLayout = sectionLayout,
+        sectionsHeight = sectionsHeight,
     }
 end
 
@@ -1942,6 +2051,7 @@ function BankWindow:RefreshWindow()
     local layout = self:ResolveAutoLayout(groups, maxItemCount, viewSettings, selectedView and selectedView.key or nil)
     local contentWidth = layout.contentWidth
     local columns = layout.columns
+    local sectionLayout = layout.sectionLayout or {}
     local slotPitch = viewSettings.itemIconSize + viewSettings.buttonGap
     self.frame:SetSize(layout.frameWidth, layout.frameHeight)
     self.emptyText:SetWidth(layout.frameWidth - 60)
@@ -1961,12 +2071,13 @@ function BankWindow:RefreshWindow()
     for i = 1, #groups do
         local category = groups[i].category
         local items = groups[i].items
+        local placement = sectionLayout[i] or {}
         if #items > 0 then
             sectionIndex = sectionIndex + 1
             local section = self.sectionFrames[sectionIndex] or self:AcquireSectionFrame()
             section:ClearAllPoints()
-            section:SetPoint("TOPLEFT", self.content, "TOPLEFT", 8, yOffset)
-            section:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", -8, yOffset)
+            section:SetPoint("TOPLEFT", self.content, "TOPLEFT", placement.x or CONTENT_SIDE_PADDING, placement.y or -8)
+            section:SetSize(placement.width or math.max(1, contentWidth - (CONTENT_SIDE_PADDING * 2)), placement.height or HEADER_HEIGHT)
             if groups[i].hidden then
                 section.title:SetText(string.format("%s (%d) (%s)", category.label, category.count, L["BAGS_HIDDEN"]))
                 section.title:SetTextColor(0.8, 0.8, 0.8, 1)
@@ -1985,39 +2096,31 @@ function BankWindow:RefreshWindow()
             end)
             section:Show()
 
-            yOffset = yOffset - HEADER_HEIGHT
             if not groups[i].hidden then
                 local row = 0
                 local column = 0
+                local sectionColumns = math.max(1, placement.columns or math.min(columns, #items))
                 for itemPosition = 1, #items do
                     itemIndex = itemIndex + 1
                     local button = self.itemButtons[itemIndex] or self:AcquireItemButton()
-                    local x = CONTENT_SIDE_PADDING + (column * slotPitch)
-                    local y = yOffset - (row * slotPitch)
+                    local x = column * slotPitch
+                    local y = -HEADER_HEIGHT - (row * slotPitch)
                     button:ClearAllPoints()
-                    button:SetPoint("TOPLEFT", self.content, "TOPLEFT", x, y)
+                    button:SetPoint("TOPLEFT", section, "TOPLEFT", x, y)
                     self:ConfigureItemButton(button, items[itemPosition], context, viewSettings)
 
                     column = column + 1
-                    if column >= columns then
+                    if column >= sectionColumns then
                         column = 0
                         row = row + 1
                     end
                 end
-
-                if column > 0 then
-                    row = row + 1
-                end
-
-                yOffset = yOffset - (row * slotPitch) - SECTION_GAP
-            else
-                yOffset = yOffset - SECTION_GAP
             end
         end
     end
 
     if #groups > 0 then
-        yOffset = yOffset + (SECTION_GAP - SUMMARY_GAP)
+        yOffset = -(layout.sectionsHeight + SUMMARY_GAP)
     end
 
     for i = 1, #(context.emptySummary or {}) do

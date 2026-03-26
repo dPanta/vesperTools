@@ -1005,6 +1005,8 @@ function vesperTools:CreateModernCloseButton(parent, onClick, options)
     end
     local iconOffsetX = math.floor((tonumber(resolvedOptions.iconOffsetX) or 0) + 0.5)
     local iconOffsetY = math.floor((tonumber(resolvedOptions.iconOffsetY) or 0) + 0.5)
+    local iconTexture = resolvedOptions.iconTexture or MODERN_CLOSE_BUTTON_TEXTURE
+    local clicks = type(resolvedOptions.clicks) == "table" and resolvedOptions.clicks or { "LeftButtonUp" }
     local iconInset = tonumber(resolvedOptions.iconInset)
     local iconSize
     if iconInset then
@@ -1015,6 +1017,7 @@ function vesperTools:CreateModernCloseButton(parent, onClick, options)
 
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
     button:SetSize(size, size)
+    button:RegisterForClicks(unpack(clicks))
     button:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1038,7 +1041,7 @@ function vesperTools:CreateModernCloseButton(parent, onClick, options)
     local icon = button:CreateTexture(nil, "OVERLAY")
     icon:SetPoint("CENTER", iconOffsetX, iconOffsetY)
     icon:SetSize(iconSize, iconSize)
-    icon:SetTexture(MODERN_CLOSE_BUTTON_TEXTURE)
+    icon:SetTexture(iconTexture)
     icon:SetVertexColor(1, 1, 1, iconAlpha)
     button.vgIconTexture = icon
 
@@ -1733,6 +1736,7 @@ function vesperTools:OnInitialize()
                 currencyBarIDs = {},
                 qualityGlowIntensity = DEFAULT_BAGS_QUALITY_GLOW_INTENSITY,
                 combineStacks = false,
+                categoryLayout = {},
             },
             bankDisplay = {
                 columns = DEFAULT_BANK_COLUMNS,
@@ -1860,6 +1864,23 @@ function vesperTools:GetBagsProfile()
     profile.display.currencyBarIDs = sanitizeCurrencyIDList(profile.display.currencyBarIDs)
     profile.display.qualityGlowIntensity = math.max(0, math.min(1, tonumber(profile.display.qualityGlowIntensity) or DEFAULT_BAGS_QUALITY_GLOW_INTENSITY))
     profile.display.combineStacks = profile.display.combineStacks and true or false
+    if type(profile.display.categoryLayout) ~= "table" then
+        profile.display.categoryLayout = {}
+    end
+    for categoryKey, entry in pairs(profile.display.categoryLayout) do
+        if type(categoryKey) ~= "string" or categoryKey == "" or type(entry) ~= "table" then
+            profile.display.categoryLayout[categoryKey] = nil
+        else
+            local order = math.floor((tonumber(entry.order) or 0) + 0.5)
+            local span = math.floor((tonumber(entry.span) or 0) + 0.5)
+            if order <= 0 and span <= 0 then
+                profile.display.categoryLayout[categoryKey] = nil
+            else
+                entry.order = order > 0 and order or nil
+                entry.span = span > 0 and span or nil
+            end
+        end
+    end
     profile.bankDisplay = profile.bankDisplay or {}
     profile.bankDisplay.columns = math.max(1, math.min(20, math.floor((tonumber(profile.bankDisplay.columns) or DEFAULT_BANK_COLUMNS) + 0.5)))
     profile.bankDisplay.itemIconSize = math.max(24, math.min(56, math.floor((tonumber(profile.bankDisplay.itemIconSize) or DEFAULT_BANK_ITEM_ICON_SIZE) + 0.5)))
