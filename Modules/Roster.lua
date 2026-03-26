@@ -594,23 +594,34 @@ function Roster:UpdateRosterList()
                 keystoneMapID = keystoneMapID,
                 keyLevel = keyLevel,
                 isInGroup = groupMembers[displayName] or false,
+                guildIndex = i,
             })
         end
     end
 
     -- Sort members
-    if self.sortColumn then
-        table.sort(members, function(a, b)
+    table.sort(members, function(a, b)
+        if a.isInGroup ~= b.isInGroup then
+            return a.isInGroup
+        end
+
+        if self.sortColumn then
             local va, vb = a[self.sortColumn], b[self.sortColumn]
             -- Stable-ish tie-break by name to avoid row jitter between refreshes.
-            if va == vb then return a.name < b.name end
-            if self.sortAscending then
-                return va < vb
-            else
-                return va > vb
+            if va ~= vb then
+                if self.sortAscending then
+                    return va < vb
+                else
+                    return va > vb
+                end
             end
-        end)
-    end
+            if a.name ~= b.name then
+                return a.name < b.name
+            end
+        end
+
+        return a.guildIndex < b.guildIndex
+    end)
 
     -- Render sorted rows
     for i, m in ipairs(members) do

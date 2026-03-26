@@ -1,3 +1,11 @@
+## 2.9.1 - 2026-03-27
+
+### Changed
+- Updated the roster window sorting so guild members who are currently in your active party or raid are grouped at the top of the list while keeping their existing highlighted row tint.
+
+### Notes
+- This hotfix improves roster scanability when forming or managing a group from the guild list.
+
 ## 2.9.0 - 2026-03-26
 
 ### Changed
