@@ -241,7 +241,7 @@ end
 -- Window open/close flow and default view resolution.
 function BankWindow:Toggle()
     if self.frame and self.frame:IsShown() then
-        self.frame:Hide()
+        self:HandleCloseRequest()
         return
     end
 
@@ -1477,6 +1477,9 @@ function BankWindow:CreateWindow()
     self.emptyText = emptyText
 
     self.frame = frame
+    vesperTools:RegisterEscapeFrame(frame, function()
+        self:HandleCloseRequest()
+    end)
     frame:SetScript("OnHide", function()
         self:HideViewMenu()
         self:HideCharacterMenu()

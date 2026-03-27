@@ -217,6 +217,9 @@ function Roster:ShowRoster()
      local _, englishClass = UnitClass("player")
      local classColor = C_ClassColor.GetClassColor(englishClass)
      self.frame:SetBackdropBorderColor(classColor.r, classColor.g, classColor.b, 1)
+    vesperTools:RegisterEscapeFrame(self.frame, function()
+        self:HandleCloseRequest()
+    end)
     
 --   Titlebar
     local titlebar = CreateFrame("Frame", nil, self.frame)
@@ -253,29 +256,7 @@ function Roster:ShowRoster()
     
     -- Close Button
     local closeBtn = vesperTools:CreateModernCloseButton(titlebar, function()
-        -- Clean up portal buttons before closing
-        if self.portalButtons then
-            for _, btn in ipairs(self.portalButtons) do
-                btn:Hide()
-                btn:SetParent(nil)
-            end
-            self.portalButtons = nil
-        end
-
-        self.frame:Hide()
-        self.frame = nil
-        self.scroll = nil
-        self.contentFrame = nil
-        self.titleText = nil
-        if self.dungeonPanel then
-            self.dungeonPanel:Hide()
-            self.dungeonPanel = nil
-        end
-        -- Also hide the Portals frame
-        local Portals = vesperTools:GetModule("Portals", true)
-        if Portals and Portals.VesperPortalsUI then
-            Portals.VesperPortalsUI:Hide()
-        end
+        self:HandleCloseRequest()
     end, {
         size = 20,
         iconScale = 0.52,
@@ -360,22 +341,39 @@ function Roster:ShowRoster()
     self:UpdateRosterList()
 end
 
+function Roster:HandleCloseRequest()
+    if not self.frame or not self.frame:IsShown() then
+        return
+    end
+
+    if self.portalButtons then
+        for _, btn in ipairs(self.portalButtons) do
+            btn:Hide()
+            btn:SetParent(nil)
+        end
+        self.portalButtons = nil
+    end
+
+    self.frame:Hide()
+    self.frame = nil
+    self.scroll = nil
+    self.contentFrame = nil
+    self.titleText = nil
+
+    if self.dungeonPanel then
+        self.dungeonPanel:Hide()
+        self.dungeonPanel = nil
+    end
+
+    local Portals = vesperTools:GetModule("Portals", true)
+    if Portals and Portals.VesperPortalsUI then
+        Portals.VesperPortalsUI:Hide()
+    end
+end
+
 function Roster:Toggle()
     if self.frame and self.frame:IsShown() then
-        -- Clean up portal buttons before hiding
-        if self.portalButtons then
-            for _, btn in ipairs(self.portalButtons) do
-                btn:Hide()
-                btn:SetParent(nil)
-            end
-            self.portalButtons = nil
-        end
-
-        self.frame:Hide()
-        self.frame = nil
-        self.scroll = nil
-        self.contentFrame = nil
-        self.titleText = nil
+        self:HandleCloseRequest()
     else
         self:ShowRoster()
     end

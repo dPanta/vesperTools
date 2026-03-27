@@ -81,6 +81,7 @@ local DEFAULT_BANK_QUALITY_GLOW_INTENSITY = 0.65
 local MAX_UTILITY_TOY_WHITELIST = 15
 local MAX_BAGS_CURRENCY_BAR_ENTRIES = 12
 local MODERN_CLOSE_BUTTON_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\CloseModern-128"
+local ESCAPE_BINDING_BUTTON_NAME = "vesperToolsEscapeBindingButton"
 local GOLD_BAR_ICON_TEXTURE = "Interface\\Icons\\INV_Misc_Coin_01"
 local ROUNDED_WINDOW_CORNER_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\RoundedCornerFill-8"
 local ROUNDED_WINDOW_BORDER_CORNER_TEXTURE = "Interface\\AddOns\\vesperTools\\Media\\RoundedCornerBorder-8"
@@ -975,6 +976,209 @@ function vesperTools:ApplyAddonWindowLayer(frame, frameLevel)
 
     if frame.SetToplevel and frame:GetParent() == UIParent then
         frame:SetToplevel(true)
+    end
+end
+
+local function getEscapeTargetKey(frame)
+    if not frame then
+        return nil
+    end
+
+    if type(frame.GetName) == "function" then
+        local frameName = frame:GetName()
+        if type(frameName) == "string" and frameName ~= "" then
+            return frameName
+        end
+    end
+
+    return tostring(frame)
+end
+
+function vesperTools:SetupEscapeBinding()
+    if self.escapeBindingButton then
+        return
+    end
+
+    local button = CreateFrame("Button", ESCAPE_BINDING_BUTTON_NAME, UIParent)
+    button:SetSize(1, 1)
+    button:RegisterForClicks("AnyUp", "AnyDown")
+    button:SetScript("OnClick", function()
+        self:HandleEscapeBindingPressed()
+    end)
+    button:Hide()
+
+    self.escapeBindingButton = button
+    self.escapeBindingEntries = self.escapeBindingEntries or {}
+
+    if not self.escapeBindingEventRegistered then
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
+        self.escapeBindingEventRegistered = true
+    end
+end
+
+function vesperTools:ScheduleEscapeBindingRefresh()
+    self.escapeBindingNeedsRefresh = true
+    if self.escapeBindingRefreshScheduled then
+        return
+    end
+
+    self.escapeBindingRefreshScheduled = true
+    if C_Timer and type(C_Timer.After) == "function" then
+        C_Timer.After(0, function()
+            self.escapeBindingRefreshScheduled = false
+            if self.escapeBindingNeedsRefresh then
+                self:RefreshEscapeBinding()
+            end
+        end)
+        return
+    end
+
+    self.escapeBindingRefreshScheduled = false
+    self:RefreshEscapeBinding()
+end
+
+function vesperTools:HasVisibleEscapeTargets()
+    local entries = self.escapeBindingEntries
+    if type(entries) ~= "table" then
+        return false
+    end
+
+    for _, entry in pairs(entries) do
+        local frame = entry.frame
+        if frame and type(frame.IsShown) == "function" and frame:IsShown() then
+            return true
+        end
+    end
+
+    return false
+end
+
+function vesperTools:RefreshEscapeBinding()
+    self:SetupEscapeBinding()
+
+    local button = self.escapeBindingButton
+    if not button then
+        return
+    end
+
+    if type(InCombatLockdown) == "function" and InCombatLockdown() then
+        self.escapeBindingPendingCombatRefresh = true
+        self.escapeBindingNeedsRefresh = true
+        return
+    end
+
+    self.escapeBindingPendingCombatRefresh = false
+    self.escapeBindingNeedsRefresh = false
+
+    if type(ClearOverrideBindings) == "function" then
+        ClearOverrideBindings(button)
+    end
+
+    if self:HasVisibleEscapeTargets() and type(SetOverrideBindingClick) == "function" then
+        SetOverrideBindingClick(button, true, "ESCAPE", button:GetName())
+    end
+end
+
+function vesperTools:GetTopEscapeTargetEntry()
+    local bestEntry = nil
+
+    for _, entry in pairs(self.escapeBindingEntries or {}) do
+        local frame = entry.frame
+        if frame and type(frame.IsShown) == "function" and frame:IsShown() then
+            local showOrder = tonumber(entry.showOrder) or 0
+            if not bestEntry or showOrder > (tonumber(bestEntry.showOrder) or 0) then
+                bestEntry = entry
+            end
+        end
+    end
+
+    return bestEntry
+end
+
+function vesperTools:OnEscapeTargetShown(frame)
+    local key = getEscapeTargetKey(frame)
+    local entry = key and self.escapeBindingEntries and self.escapeBindingEntries[key] or nil
+    if not entry then
+        return
+    end
+
+    self.escapeBindingShowSequence = (tonumber(self.escapeBindingShowSequence) or 0) + 1
+    entry.showOrder = self.escapeBindingShowSequence
+    self:ScheduleEscapeBindingRefresh()
+end
+
+function vesperTools:OnEscapeTargetHidden(frame)
+    local key = getEscapeTargetKey(frame)
+    if key and self.escapeBindingEntries and self.escapeBindingEntries[key] then
+        self.escapeBindingEntries[key].showOrder = tonumber(self.escapeBindingEntries[key].showOrder) or 0
+    end
+
+    self:ScheduleEscapeBindingRefresh()
+end
+
+function vesperTools:RegisterEscapeFrame(frame, closeCallback)
+    if not frame or type(frame.IsShown) ~= "function" then
+        return
+    end
+
+    self:SetupEscapeBinding()
+
+    local key = getEscapeTargetKey(frame)
+    if not key then
+        return
+    end
+
+    local entries = self.escapeBindingEntries
+    local entry = entries[key]
+    if not entry then
+        entry = {}
+        entries[key] = entry
+    end
+
+    entry.frame = frame
+    entry.close = type(closeCallback) == "function" and closeCallback or function(selfFrame)
+        if selfFrame and type(selfFrame.Hide) == "function" then
+            selfFrame:Hide()
+        end
+    end
+
+    if entry.hookedFrame ~= frame then
+        frame:HookScript("OnShow", function(shownFrame)
+            self:OnEscapeTargetShown(shownFrame)
+        end)
+        frame:HookScript("OnHide", function(hiddenFrame)
+            self:OnEscapeTargetHidden(hiddenFrame)
+        end)
+        entry.hookedFrame = frame
+    end
+
+    if frame:IsShown() then
+        self:OnEscapeTargetShown(frame)
+    else
+        self:ScheduleEscapeBindingRefresh()
+    end
+end
+
+function vesperTools:HandleEscapeBindingPressed()
+    local entry = self:GetTopEscapeTargetEntry()
+    if not entry then
+        self:ScheduleEscapeBindingRefresh()
+        return
+    end
+
+    if type(entry.close) == "function" then
+        entry.close(entry.frame)
+        return
+    end
+
+    if entry.frame and type(entry.frame.Hide) == "function" then
+        entry.frame:Hide()
+    end
+end
+
+function vesperTools:PLAYER_REGEN_ENABLED()
+    if self.escapeBindingNeedsRefresh or self.escapeBindingPendingCombatRefresh then
+        self:RefreshEscapeBinding()
     end
 end
 

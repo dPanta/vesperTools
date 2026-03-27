@@ -1592,6 +1592,9 @@ function Portals:CreatePortalFrame()
         }
     end)
     self.VesperPortalsUI:Hide()
+    vesperTools:RegisterEscapeFrame(self.VesperPortalsUI, function()
+        self:HandleCloseRequest()
+    end)
 
     vesperTools:ApplyRoundedWindowBackdrop(self.VesperPortalsUI)
     self.VesperPortalsUI:SetBackdropColor(0.07, 0.07, 0.07, vesperTools:GetConfiguredOpacity("portals")) -- #121212
@@ -1885,6 +1888,21 @@ function Portals:CreateMPlusProgFrame(curSeason)
     end
 end
 
+function Portals:HandleCloseRequest()
+    if InCombatLockdown() then
+        -- Portal buttons use secure attributes; prevent show/hide rebuilds in combat lockdown.
+        vesperTools:Print(L["PORTALS_TOGGLE_IN_COMBAT"])
+        return
+    end
+
+    if not self.VesperPortalsUI or not self.VesperPortalsUI:IsShown() then
+        return
+    end
+
+    self:HideToyFlyout()
+    self.VesperPortalsUI:Hide()
+end
+
 function Portals:Toggle()
     if InCombatLockdown() then
         -- Portal buttons use secure attributes; prevent show/hide rebuilds in combat lockdown.
@@ -1898,8 +1916,7 @@ function Portals:Toggle()
     end
 
     if self.VesperPortalsUI:IsShown() then
-        self:HideToyFlyout()
-        self.VesperPortalsUI:Hide()
+        self:HandleCloseRequest()
     else
         -- Rebuild each open so current-season best run data is always fresh.
         if self.mplusProgFrame then

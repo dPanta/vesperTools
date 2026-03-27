@@ -652,11 +652,20 @@ end
 
 function VaultWindow:Toggle()
     if self.frame and self.frame:IsShown() then
-        self.frame:Hide()
+        self:HandleCloseRequest()
         return
     end
 
     self:ShowWindow()
+end
+
+function VaultWindow:HandleCloseRequest()
+    if not self.frame or not self.frame:IsShown() then
+        return
+    end
+
+    self:HideCharacterMenu()
+    self.frame:Hide()
 end
 
 function VaultWindow:ShowWindow()
@@ -1024,8 +1033,7 @@ function VaultWindow:CreateWindow()
     self.modeText = modeText
 
     local closeButton = vesperTools:CreateModernCloseButton(titlebar, function()
-        self:HideCharacterMenu()
-        frame:Hide()
+        self:HandleCloseRequest()
     end, {
         size = 20,
         iconScale = 0.52,
@@ -1164,6 +1172,9 @@ function VaultWindow:CreateWindow()
     self.emptyText = emptyText
 
     self.frame = frame
+    vesperTools:RegisterEscapeFrame(frame, function()
+        self:HandleCloseRequest()
+    end)
     frame:SetScript("OnHide", function()
         self:HideCharacterMenu()
     end)

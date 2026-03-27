@@ -1,3 +1,16 @@
+## 3.1.0 - 2026-03-27
+
+### Changed
+- Added a shared addon-level `ESCAPE` window manager so vesperTools now closes its own top-level windows consistently without relying on external addon hooks.
+- Registered Bags, Bank, Vault, Roster, Portals, and Configuration with the shared close path so the active window responds to `ESCAPE` the same way its close button does.
+
+### Fixed
+- Fixed inconsistent `ESCAPE` behavior where some vesperTools windows were not closeable from the keyboard unless another addon happened to provide the binding.
+- Fixed window close handling so keyboard-driven close requests now respect module-specific cleanup paths such as bank replacement shutdown, menu dismissal, and linked window cleanup.
+
+### Notes
+- This minor release turns window dismissal into a native shared behavior inside vesperTools instead of leaving it split across one-off frame registrations and outside addon code.
+
 ## 3.0.1 - 2026-03-27
 
 ### Fixed

@@ -389,11 +389,21 @@ end
 
 function BagsWindow:Toggle()
     if self.frame and self.frame:IsShown() then
-        self.frame:Hide()
+        self:HandleCloseRequest()
         return
     end
 
     self:ShowWindow()
+end
+
+function BagsWindow:HandleCloseRequest()
+    if not self.frame or not self.frame:IsShown() then
+        return
+    end
+
+    self:HideCharacterMenu()
+    self:HideBagSlotsMenu()
+    self.frame:Hide()
 end
 
 function BagsWindow:ShowWindow()
@@ -2123,8 +2133,7 @@ function BagsWindow:CreateWindow()
     self.searchPlaceholder = searchPlaceholder
 
     local closeButton = vesperTools:CreateModernCloseButton(titlebar, function()
-        self:HideCharacterMenu()
-        frame:Hide()
+        self:HandleCloseRequest()
     end, {
         size = 20,
         iconScale = 0.52,
@@ -2347,6 +2356,9 @@ function BagsWindow:CreateWindow()
     self.currencyBarDivider = currencyBarDivider
 
     self.frame = frame
+    vesperTools:RegisterEscapeFrame(frame, function()
+        self:HandleCloseRequest()
+    end)
     frame:SetScript("OnHide", function()
         self.layoutEditMode = false
         self:StopCategoryDrag(false)

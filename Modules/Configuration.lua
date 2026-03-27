@@ -2002,18 +2002,9 @@ function Configuration:BuildPanel()
     panel:SetBackdropBorderColor(0.2, 0.2, 0.24, 1)
     panel:Hide()
 
-    -- Register as a special frame so Escape closes the window.
-    if type(UISpecialFrames) == "table" then
-        local frameName = panel:GetName()
-        local found = false
-        for i = 1, #UISpecialFrames do
-            if UISpecialFrames[i] == frameName then
-                found = true
-                break
-            end
-        end
-        if not found then
-            table.insert(UISpecialFrames, frameName)
+    local function closePanel()
+        if panel and panel:IsShown() then
+            panel:Hide()
         end
     end
 
@@ -2044,9 +2035,7 @@ function Configuration:BuildPanel()
         panel:StopMovingOrSizing()
     end)
 
-    local closeButton = vesperTools:CreateModernCloseButton(panel, function()
-        panel:Hide()
-    end, {
+    local closeButton = vesperTools:CreateModernCloseButton(panel, closePanel, {
         size = 22,
         iconScale = 0.5,
         backgroundAlpha = 0.05,
@@ -2708,6 +2697,7 @@ function Configuration:BuildPanel()
     self.bankQualityGlowSlider = bankQualityGlowSlider
     self.bankShowItemLevelCheckbox = bankShowItemLevelCheckbox
     self.bankReplaceBlizzardCheckbox = bankReplaceBlizzardCheckbox
+    vesperTools:RegisterEscapeFrame(panel, closePanel)
     self:SetActiveTab(self.activeTab or "roster")
 end
 
