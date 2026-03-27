@@ -1,3 +1,12 @@
+## 3.1.1 - 2026-03-27
+
+### Fixed
+- Fixed the minimap launcher and empty `/vesper` toggle so Roster and Portals are now treated as one paired window set instead of flipping independently.
+- Fixed the desynced launcher state where clicking the icon with only one of the paired windows open could reopen one frame while closing the other.
+
+### Notes
+- This hotfix keeps the default launcher behavior predictable again: one click opens both primary windows, and the next click closes whichever of the pair is currently open.
+
 ## 3.1.0 - 2026-03-27
 
 ### Changed

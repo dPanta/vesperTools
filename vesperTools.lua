@@ -2738,6 +2738,63 @@ function vesperTools:OnGuildRosterUpdate()
     self:UpdateFloatingIconOnlineCount()
 end
 
+local function isFrameShown(frame)
+    return frame and type(frame.IsShown) == "function" and frame:IsShown() and true or false
+end
+
+function vesperTools:AreLauncherWindowsShown()
+    local roster = self:GetModule("Roster", true)
+    local portals = self:GetModule("Portals", true)
+
+    local rosterFrame = (roster and roster.frame) or _G.vesperToolsFrame
+    local portalsFrame = (portals and portals.VesperPortalsUI) or _G.vesperToolsPortalFrame
+
+    return isFrameShown(rosterFrame), isFrameShown(portalsFrame)
+end
+
+function vesperTools:ToggleLauncherWindows()
+    local Roster = self:GetModule("Roster", true)
+    local Portals = self:GetModule("Portals", true)
+    if not Roster or not Portals then
+        self:Print(L["ROSTER_OR_PORTALS_MODULE_MISSING"])
+        return false
+    end
+
+    local rosterShown, portalsShown = self:AreLauncherWindowsShown()
+    if rosterShown or portalsShown then
+        if rosterShown then
+            if type(Roster.HandleCloseRequest) == "function" then
+                Roster:HandleCloseRequest()
+            elseif type(Roster.Toggle) == "function" then
+                Roster:Toggle()
+            end
+        end
+
+        if portalsShown then
+            if type(Portals.HandleCloseRequest) == "function" then
+                Portals:HandleCloseRequest()
+            elseif type(Portals.Toggle) == "function" then
+                Portals:Toggle()
+            end
+        end
+
+        return true
+    end
+
+    if type(Roster.ShowRoster) == "function" then
+        Roster:ShowRoster()
+    elseif type(Roster.Toggle) == "function" then
+        Roster:Toggle()
+    end
+
+    if type(Portals.Toggle) == "function" then
+        Portals:Toggle()
+    end
+
+    self:SendMessage("VESPERTOOLS_ADDON_OPENED")
+    return true
+end
+
 -- Build the draggable floating launcher button and its tooltip behavior.
 function vesperTools:CreateFloatingIcon()
     local btn = CreateFrame("Button", "vesperToolsIcon", UIParent)
@@ -2784,11 +2841,7 @@ function vesperTools:CreateFloatingIcon()
     -- Click Script - left click to toggle roster and portals (no shift required)
     btn:SetScript("OnClick", function(self, button)
         if button == "LeftButton" and not IsShiftKeyDown() then
-            local Roster = vesperTools:GetModule("Roster", true)
-            local Portals = vesperTools:GetModule("Portals", true)
-            if Roster then Roster:Toggle() end
-            if Portals then Portals:Toggle() end
-            vesperTools:SendMessage("VESPERTOOLS_ADDON_OPENED")
+            vesperTools:ToggleLauncherWindows()
         end
     end)
 
@@ -2865,16 +2918,7 @@ function vesperTools:HandleChatCommand(input)
     local loweredInput = string.lower(normalizedInput)
 
     if normalizedInput == "" then
-        -- Open the roster and portals window by default
-        local Roster = self:GetModule("Roster", true)
-        local Portals = self:GetModule("Portals", true)
-        if Roster and Portals then
-            Roster:Toggle()
-            Portals:Toggle()
-            self:SendMessage("VESPERTOOLS_ADDON_OPENED")
-        else
-            self:Print(L["ROSTER_OR_PORTALS_MODULE_MISSING"])
-        end
+        self:ToggleLauncherWindows()
     elseif loweredInput == "config" or loweredInput == "options" then
         -- Keep both aliases for convenience and discoverability.
         self:OpenConfig()
