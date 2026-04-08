@@ -163,6 +163,7 @@ local HEARTHSTONE_CATALOG = {
     245970, -- P.O.S.T. Master's Express Hearthstone
     246565, -- Cosmic Hearthstone
     253629, -- Personal Key to the Arcantina
+    263933, -- Preyseeker's Hearthstone
 }
 
 -- Primary dropdown excludes these so first button focuses on non-default utility choices.

@@ -1,3 +1,11 @@
+## 3.2.5 - 2026-04-08
+
+### Fixed
+- Added `Preyseeker's Hearthstone` to the portals hearthstone catalog so owned copies now appear in the per-character hearthstone selection list.
+
+### Notes
+- This hotfix restores the missing hearthstone variant in the portals selection flow without changing any existing hearthstone behavior.
+
 ## 3.2.4 - 2026-04-07
 
 ### Changed
@@ -53,12 +61,3 @@
 
 ### Notes
 - This minor release bundles a larger roster modernization pass with new world-map skinning markers, party/raid utility buttons, and the supporting internal cleanup needed to keep future de-Ace work safer.
-
-## 3.1.2 - 2026-03-29
-
-### Fixed
-- Corrected the Skyreach dungeon portal mapping so the addon now points at the working teleport spell again.
-- Hardened teleport unlock detection for portal buttons and roster row casts so learned dungeon teleports are no longer treated as unavailable just because they are missing from the strict spellbook lookup path.
-
-### Notes
-- This hotfix focuses on restoring reliable Skyreach portal access while making the addon's dungeon-teleport availability checks more tolerant of current client API behavior.
