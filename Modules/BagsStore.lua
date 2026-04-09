@@ -5,17 +5,18 @@ local L = vesperTools.L
 -- BagsStore owns the live carried-bag snapshot for the current character and the
 -- account-wide aggregate index used by the replacement inventory views.
 local ITEM_CLASS = Enum and Enum.ItemClass or {}
-local CURRENT_BAGS_SCHEMA_VERSION = 3
+local CURRENT_BAGS_SCHEMA_VERSION = 5
 local BAG_CATEGORY_DEFS = {
     { key = "quest", labelKey = "BAGS_CATEGORY_QUEST", order = 1 },
-    { key = "junk", labelKey = "BAGS_CATEGORY_JUNK", order = 2 },
-    { key = "reagent", labelKey = "BAGS_CATEGORY_REAGENT", order = 3 },
-    { key = "consumable", labelKey = "BAGS_CATEGORY_CONSUMABLE", order = 4 },
-    { key = "equipment", labelKey = "BAGS_CATEGORY_EQUIPMENT", order = 5 },
-    { key = "recipe", labelKey = "BAGS_CATEGORY_RECIPE", order = 6 },
-    { key = "tradegoods", labelKey = "BAGS_CATEGORY_TRADE_GOODS", order = 7 },
-    { key = "container", labelKey = "BAGS_CATEGORY_CONTAINER", order = 8 },
-    { key = "misc", labelKey = "BAGS_CATEGORY_MISC", order = 9 },
+    { key = "season", labelKey = "BAGS_CATEGORY_SEASON", order = 2 },
+    { key = "junk", labelKey = "BAGS_CATEGORY_JUNK", order = 3 },
+    { key = "reagent", labelKey = "BAGS_CATEGORY_REAGENT", order = 4 },
+    { key = "consumable", labelKey = "BAGS_CATEGORY_CONSUMABLE", order = 5 },
+    { key = "equipment", labelKey = "BAGS_CATEGORY_EQUIPMENT", order = 6 },
+    { key = "recipe", labelKey = "BAGS_CATEGORY_RECIPE", order = 7 },
+    { key = "tradegoods", labelKey = "BAGS_CATEGORY_TRADE_GOODS", order = 8 },
+    { key = "container", labelKey = "BAGS_CATEGORY_CONTAINER", order = 9 },
+    { key = "misc", labelKey = "BAGS_CATEGORY_MISC", order = 10 },
     { key = "past_expansions", labelKey = "BAGS_CATEGORY_PAST_EXPANSIONS", order = 100 },
 }
 
@@ -43,6 +44,18 @@ local LEGACY_SEASONAL_EQUIPMENT_TRACK_MARKERS = {
     "track: champion",
     "track: hero",
     "track: myth",
+}
+local SEASON_SPECIAL_ITEM_IDS = {
+    [233071] = true, -- Delver's Bounty
+    [235628] = true, -- Delver's Bounty with upgrade data
+    [264414] = true, -- Midnight Delver's Flare Gun
+}
+local SEASON_NAME_MARKERS = {
+    "mythic keystone",
+}
+local SEASON_SPARK_NAME_PREFIXES = {
+    "spark of ",
+    "fractured spark of ",
 }
 for i = 1, #BAG_CATEGORY_DEFS do
     local def = BAG_CATEGORY_DEFS[i]
@@ -169,6 +182,40 @@ local function textContainsAnyMarker(text, markers)
     end
 
     return false
+end
+
+local function textStartsWithAnyMarker(text, markers)
+    if type(text) ~= "string" or text == "" then
+        return false
+    end
+
+    for i = 1, #markers do
+        if text:find(markers[i], 1, true) == 1 then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function isKnownSeasonItemID(itemID)
+    local numericID = tonumber(itemID)
+    if not numericID then
+        return false
+    end
+
+    numericID = math.floor(numericID + 0.5)
+    return SEASON_SPECIAL_ITEM_IDS[numericID] and true or false
+end
+
+local function isSeasonSparkItem(meta, info)
+    local isCraftingReagent = (info and info.isCraftingReagent) or (meta and meta.isCraftingReagent)
+    if not isCraftingReagent then
+        return false
+    end
+
+    local itemName = normalizeSearchText((meta and meta.itemName) or (info and info.itemName) or "")
+    return textStartsWithAnyMarker(itemName, SEASON_SPARK_NAME_PREFIXES)
 end
 
 local function normalizeExpansionID(expansionID)
@@ -767,6 +814,16 @@ function BagsStore:ResolveCategoryKey(meta, info, questInfo)
         return "quest"
     end
 
+    local searchText = (meta and meta.searchText)
+        or (info and info.searchText)
+        or normalizeSearchText((info and info.itemName) or "")
+    if isKnownSeasonItemID(info and info.itemID)
+        or textContainsAnyMarker(searchText, SEASON_NAME_MARKERS)
+        or isSeasonSparkItem(meta, info)
+    then
+        return "season"
+    end
+
     if info and tonumber(info.quality) == 0 then
         return "junk"
     end
@@ -1111,9 +1168,9 @@ function BagsStore:RunGlobalMigrations(global, startingVersion)
         return false
     end
 
-    if schemaVersion < 3 then
+    if schemaVersion < 5 then
         self:RefreshCurrentScaledLegacyEquipmentData(global)
-        schemaVersion = 3
+        schemaVersion = 5
     end
 
     global.schemaVersion = schemaVersion

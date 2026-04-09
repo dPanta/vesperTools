@@ -1,3 +1,23 @@
+## 3.2.7 - 2026-04-09
+
+### Changed
+- Added a carried-bag `Season` category so seasonal items are grouped separately from the normal reagent and misc buckets.
+
+### Fixed
+- Added current seasonal spark reagents such as `Spark of ...` and `Fractured Spark of ...` to the carried-bag `Season` category instead of leaving them in `Crafting Reagents`.
+- Added a bags data migration so existing saved bag snapshots are recategorized into `Season` immediately after update instead of waiting for each character to rescan those items.
+
+### Notes
+- This hotfix finishes the new bag-season grouping by making the category visible, catching the common spark crafting reagents automatically, and backfilling already-saved bag data on reload.
+
+## 3.2.6 - 2026-04-08
+
+### Fixed
+- Added `Lightcalled Hearthstone` to the portals hearthstone catalog so owned copies now appear in the per-character hearthstone selection list.
+
+### Notes
+- This hotfix restores another missing hearthstone variant in the portals selection flow without changing any existing hearthstone behavior.
+
 ## 3.2.5 - 2026-04-08
 
 ### Fixed
@@ -43,21 +63,3 @@
 
 ### Notes
 - This hotfix is focused on stabilizing the new Midnight lure map markers after the larger `3.2.0` feature release.
-
-## 3.2.0 - 2026-03-30
-
-### Changed
-- Rebuilt the Roster window on native Blizzard frames instead of `AceGUI`, while keeping the existing guild roster actions and adding a cleaner modern scrollbar treatment.
-- Added Midnight skinning-lure markers to configured Midnight zone maps, with click-to-waypoint behavior that uses Blizzard's built-in navigation arrow.
-- Added `Ready` and `Pull` action buttons above Blizzard's party and raid frame headers for group leaders and raid assistants.
-- Added shared internal helpers for window lifecycle, combat-safe deferred refreshes, comm routing, timer handling, and reusable modern button styling as groundwork for reducing Ace dependencies.
-
-### Fixed
-- Fixed roster window lifecycle so reopening it no longer risks duplicate named-frame issues, and live keystone updates now refresh the open roster correctly.
-- Fixed bundled locale loading so non-`enUS` translations work correctly when using the packaged addon libraries on their own.
-- Fixed native container overlay input handling so replacement Bags and Bank interactions no longer trigger the protected-action warning seen during live item overlay refreshes.
-- Fixed the new Midnight lure map pins so parent/child world-map navigation no longer trips a `Blizzard_MapCanvas` assertion during map changes.
-- Fixed the roster scrollbar and close-button polish pass so the scrollbar hides when not needed, uses a softer darker style, and the close icon now adopts the player's class color.
-
-### Notes
-- This minor release bundles a larger roster modernization pass with new world-map skinning markers, party/raid utility buttons, and the supporting internal cleanup needed to keep future de-Ace work safer.

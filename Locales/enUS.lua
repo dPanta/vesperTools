@@ -45,6 +45,7 @@ local defaults = {
     BAGS_CATEGORY_QUEST = "Quest",
     BAGS_CATEGORY_REAGENT = "Crafting Reagents",
     BAGS_CATEGORY_RECIPE = "Recipes",
+    BAGS_CATEGORY_SEASON = "Season",
     BAGS_CATEGORY_TRADE_GOODS = "Trade Goods",
     BAGS_CLEAR_NEW_ITEMS = "Cleanup",
     BAGS_CLEAR_NEW_ITEMS_HINT = "Marks newly added carried-bag items as seen and removes their glow.",

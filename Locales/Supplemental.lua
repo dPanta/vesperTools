@@ -29,6 +29,7 @@ local EN_MISSING = {
     BANK_NO_ITEMS = "No stored items in this bank view.",
     BANK_WINDOW_MODULE_NOT_FOUND = "Bank window module not found!",
     BAGS_CATEGORY_PAST_EXPANSIONS = "Past Expansions",
+    BAGS_CATEGORY_SEASON = "Season",
     BAGS_CLEAR_NEW_ITEMS_HINT = "Marks newly added carried-bag items as seen and removes their glow.",
     BAGS_BAG_SLOTS_ON = "Showing equipped bag slots.",
     BAGS_BAG_SLOTS_OFF = "Hiding equipped bag slots.",

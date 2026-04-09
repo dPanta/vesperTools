@@ -163,6 +163,7 @@ local HEARTHSTONE_CATALOG = {
     245970, -- P.O.S.T. Master's Express Hearthstone
     246565, -- Cosmic Hearthstone
     253629, -- Personal Key to the Arcantina
+    257736, -- Lightcalled Hearthstone
     263933, -- Preyseeker's Hearthstone
 }
 
