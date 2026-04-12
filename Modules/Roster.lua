@@ -1143,6 +1143,7 @@ function Roster:HandleCloseRequest()
     self.pendingRosterRefresh = false
     self:HideRosterRows(1)
     GameTooltip:Hide()
+    vesperTools:HideSearchOverlay()
     WindowLifecycle:Hide(self.frame)
 
     if self.dungeonPanel then

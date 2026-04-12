@@ -262,6 +262,7 @@ function BagsWindow:OnInitialize()
     self.visibleSectionFramesByCategoryKey = {}
     self.newItemGlowKeysSeen = {}
     self.pendingSecureItemRefresh = false
+    self.focusedSearchLocator = nil
 end
 
 function BagsWindow:OnEnable()
@@ -291,6 +292,7 @@ function BagsWindow:GetItemInteraction()
     self.itemInteraction = vesperTools:CreateContainerItemController(self, {
         assignContextToButton = function(_, button, context)
             button.isCurrentCharacter = context and context.isCurrentCharacter and true or false
+            button.searchCharacterKey = context and context.characterKey or nil
         end,
         afterConfigureButton = function(window, button, record, context)
             local isCurrentCharacter = context and context.isCurrentCharacter and true or false
@@ -1798,6 +1800,7 @@ function BagsWindow:UpdateSearchClearButton(hasText)
 end
 
 function BagsWindow:SetSearchQuery(text)
+    self.focusedSearchLocator = nil
     self.searchQuery = normalizeSearchText(text)
     self:UpdateSearchPlaceholder()
     if self.frame and self.frame:IsShown() then
@@ -1807,6 +1810,7 @@ end
 
 function BagsWindow:ClearSearch()
     local hadQuery = self.searchQuery ~= nil
+    self.focusedSearchLocator = nil
     self.searchQuery = nil
     local guildLookup = self:GetGuildLookup()
     if guildLookup then
@@ -1866,6 +1870,101 @@ function BagsWindow:ApplySearchDimState(button, record, searchTokens)
     button.searchMatched = matchesSearch
     button.icon:SetDesaturated((record.isLocked or not matchesSearch) and true or false)
     button:SetAlpha(matchesSearch and 1 or 0.24)
+    self:ApplyFocusedSearchState(button, record)
+end
+
+function BagsWindow:IsFocusedSearchRecord(button, record)
+    local locator = self.focusedSearchLocator
+    if type(locator) ~= "table" or type(record) ~= "table" then
+        return false
+    end
+
+    if locator.characterKey and button and button.searchCharacterKey and locator.characterKey ~= button.searchCharacterKey then
+        return false
+    end
+
+    local locatorBagID = tonumber(locator.bagID)
+    local locatorSlotID = tonumber(locator.slotID)
+    if locatorBagID and locatorSlotID then
+        return tonumber(record.bagID) == locatorBagID and tonumber(record.slotID) == locatorSlotID
+    end
+
+    local locatorItemID = tonumber(locator.itemID)
+    if locatorItemID then
+        return tonumber(record.itemID) == locatorItemID
+    end
+
+    return false
+end
+
+function BagsWindow:ApplyFocusedSearchState(button, record)
+    if not button then
+        return
+    end
+
+    local highlight = button.searchResultHighlight
+    if not highlight then
+        highlight = button:CreateTexture(nil, "OVERLAY")
+        highlight:SetAllPoints(button)
+        highlight:SetColorTexture(1, 0.82, 0.24, 0.18)
+        highlight:Hide()
+        button.searchResultHighlight = highlight
+    end
+
+    if self:IsFocusedSearchRecord(button, record) then
+        highlight:Show()
+        button:SetBackdropBorderColor(1, 0.82, 0.24, 1)
+        button:SetAlpha(1)
+        button.icon:SetDesaturated(record and record.isLocked and true or false)
+        return
+    end
+
+    highlight:Hide()
+end
+
+function BagsWindow:OpenSearchResult(locator)
+    if type(locator) ~= "table" then
+        return
+    end
+
+    self:ShowWindow()
+
+    local characterKey = type(locator.characterKey) == "string" and locator.characterKey or nil
+    if characterKey and characterKey ~= self.selectedCharacterKey then
+        self.selectedCharacterKey = characterKey
+        local bagsProfile = vesperTools:GetBagsProfile()
+        if bagsProfile then
+            bagsProfile.lastViewedCharacterGUID = characterKey
+        end
+    end
+
+    self.focusedSearchLocator = {
+        characterKey = characterKey,
+        itemID = tonumber(locator.itemID) or nil,
+        bagID = tonumber(locator.bagID) or nil,
+        slotID = tonumber(locator.slotID) or nil,
+    }
+
+    if characterKey and type(locator.categoryKey) == "string" and locator.categoryKey ~= "" then
+        self:SetCategoryCollapsed(characterKey, locator.categoryKey, false)
+    end
+
+    local queryText = type(locator.queryText) == "string" and locator.queryText or locator.itemName or ""
+    self.searchQuery = normalizeSearchText(queryText)
+
+    local guildLookup = self:GetGuildLookup()
+    if guildLookup then
+        guildLookup:ClearResults()
+    end
+
+    if self.searchBox and self.searchBox:GetText() ~= queryText then
+        self.searchBox:SetText(queryText)
+    end
+
+    self:UpdateSearchPlaceholder()
+    if self.frame and self.frame:IsShown() then
+        self:RefreshWindow()
+    end
 end
 
 function BagsWindow:GetSnapshotSearchMatchCount(snapshot, searchTokens)
@@ -3571,6 +3670,7 @@ function BagsWindow:RefreshWindow()
     local slotPitch = self:GetSlotPitch(viewSettings)
     local itemContext = {
         ownerName = selectedCharacter.fullName,
+        characterKey = selectedCharacter.key,
         isInteractive = selectedCharacter.isCurrent and true or false,
         isCurrentCharacter = selectedCharacter.isCurrent and true or false,
     }

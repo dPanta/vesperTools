@@ -184,6 +184,7 @@ function BankWindow:OnInitialize()
     self.displayCharacters = {}
     self.characterSearchMatchCounts = nil
     self.pendingSecureItemRefresh = false
+    self.focusedSearchLocator = nil
 end
 
 function BankWindow:OnEnable()
@@ -210,6 +211,8 @@ function BankWindow:GetItemInteraction()
     self.itemInteraction = vesperTools:CreateContainerItemController(self, {
         assignContextToButton = function(_, button, context)
             button.isLive = context and context.isLive and true or false
+            button.searchCharacterKey = context and context.characterKey or nil
+            button.searchViewKey = context and context.viewKey or nil
         end,
         afterConfigureButton = function(window, button, record)
             window:ApplySearchDimState(button, record, window:GetSearchTokens())
@@ -993,6 +996,7 @@ function BankWindow:UpdateSearchClearButton(hasText)
 end
 
 function BankWindow:SetSearchQuery(text)
+    self.focusedSearchLocator = nil
     self.searchQuery = normalizeSearchText(text)
     self:UpdateSearchPlaceholder()
     if self.frame and self.frame:IsShown() then
@@ -1002,6 +1006,7 @@ end
 
 function BankWindow:ClearSearch()
     local hadQuery = self.searchQuery ~= nil
+    self.focusedSearchLocator = nil
     self.searchQuery = nil
     if self.searchBox and self.searchBox:GetText() ~= "" then
         self.searchBox:SetText("")
@@ -1057,6 +1062,110 @@ function BankWindow:ApplySearchDimState(button, record, searchTokens)
     button.searchMatched = matchesSearch
     button.icon:SetDesaturated((record.isLocked or not matchesSearch) and true or false)
     button:SetAlpha(matchesSearch and 1 or 0.24)
+    self:ApplyFocusedSearchState(button, record)
+end
+
+function BankWindow:IsFocusedSearchRecord(button, record)
+    local locator = self.focusedSearchLocator
+    if type(locator) ~= "table" or type(record) ~= "table" then
+        return false
+    end
+
+    if locator.viewKey and button and button.searchViewKey and locator.viewKey ~= button.searchViewKey then
+        return false
+    end
+
+    if locator.characterKey and button and button.searchCharacterKey and locator.characterKey ~= button.searchCharacterKey then
+        return false
+    end
+
+    local locatorBagID = tonumber(locator.bagID)
+    local locatorSlotID = tonumber(locator.slotID)
+    if locatorBagID and locatorSlotID then
+        return tonumber(record.bagID) == locatorBagID and tonumber(record.slotID) == locatorSlotID
+    end
+
+    local locatorItemID = tonumber(locator.itemID)
+    if locatorItemID then
+        return tonumber(record.itemID) == locatorItemID
+    end
+
+    return false
+end
+
+function BankWindow:ApplyFocusedSearchState(button, record)
+    if not button then
+        return
+    end
+
+    local highlight = button.searchResultHighlight
+    if not highlight then
+        highlight = button:CreateTexture(nil, "OVERLAY")
+        highlight:SetAllPoints(button)
+        highlight:SetColorTexture(1, 0.82, 0.24, 0.18)
+        highlight:Hide()
+        button.searchResultHighlight = highlight
+    end
+
+    if self:IsFocusedSearchRecord(button, record) then
+        highlight:Show()
+        button:SetBackdropBorderColor(1, 0.82, 0.24, 1)
+        button:SetAlpha(1)
+        button.icon:SetDesaturated(record and record.isLocked and true or false)
+        return
+    end
+
+    highlight:Hide()
+end
+
+function BankWindow:OpenSearchResult(locator)
+    if type(locator) ~= "table" then
+        return
+    end
+
+    self:ShowWindow(locator.viewKey)
+
+    local viewKey = locator.viewKey == "warband" and "warband" or "character"
+    if self.selectedViewType ~= viewKey then
+        self.selectedViewType = viewKey
+        local bagsProfile = vesperTools:GetBagsProfile()
+        if bagsProfile then
+            bagsProfile.lastViewedBankView = viewKey
+        end
+    end
+
+    local characterKey = type(locator.characterKey) == "string" and locator.characterKey or nil
+    if viewKey == "character" and characterKey and characterKey ~= self.selectedCharacterKey then
+        self.selectedCharacterKey = characterKey
+        local bagsProfile = vesperTools:GetBagsProfile()
+        if bagsProfile then
+            bagsProfile.lastViewedBankCharacterGUID = characterKey
+        end
+    end
+
+    self.focusedSearchLocator = {
+        viewKey = viewKey,
+        characterKey = characterKey,
+        itemID = tonumber(locator.itemID) or nil,
+        bagID = tonumber(locator.bagID) or nil,
+        slotID = tonumber(locator.slotID) or nil,
+    }
+
+    if type(locator.categoryKey) == "string" and locator.categoryKey ~= "" then
+        self:SetCategoryCollapsed(viewKey == "warband" and "warband" or (characterKey or "character"), locator.categoryKey, false)
+    end
+
+    local queryText = type(locator.queryText) == "string" and locator.queryText or locator.itemName or ""
+    self.searchQuery = normalizeSearchText(queryText)
+
+    if self.searchBox and self.searchBox:GetText() ~= queryText then
+        self.searchBox:SetText(queryText)
+    end
+
+    self:UpdateSearchPlaceholder()
+    if self.frame and self.frame:IsShown() then
+        self:RefreshWindow()
+    end
 end
 
 function BankWindow:GetSnapshotSearchMatchCount(snapshot, searchTokens)

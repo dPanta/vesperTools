@@ -1,211 +1,31 @@
 # vesperTools
 
-**vesperTools** is a guild-focused addon built to make **Mythic+ coordination, roster management, portals, and inventory access** easier and faster.
+`vesperTools` is a retail WoW addon focused on Mythic+ guild play, travel shortcuts, and account-wide inventory access.
 
-It brings together guild utilities, key tracking, seasonal dungeon portal access, item level sharing, and a **full bags, bank, and warband bank replacement** with **account-wide inventory browsing** in one addon.
+## What It Does
 
-I originally made this mainly as a tool for my guildies, but it should work just as well for everyone :)
+- Guild roster tools: shows roster info with Mythic+ data, item level sync, known keys, invite and whisper shortcuts, and best-run tooltip sharing between addon users.
+- Mythic+ helpers: tracks seasonal dungeon progress, syncs keys automatically, and can warn you when you finish a key but are still holding the same or a lower keystone.
+- Portals and travel: shows the current season's dungeon portals, lets you click a key to use its teleport, and adds quick access to hearthstones, mage portals, teleports, and favorite toys.
+- Vault tools: opens the live Great Vault and stores account-wide weekly vault snapshots so you can compare rewards across characters.
+- Inventory tools: replaces the default bags, bank, and warband bank with unified windows, adds a configurable currency bar, and lets you browse saved inventory data across your characters.
+- Search tools: includes a launcher-style search overlay for addon windows, addon config, Blizzard settings, toys, spells, talents, Click Cast Bindings, bags, and bank results.
+- Guild item lookup: can query guild inventories for specific items when other players opt in to sharing their bag data.
 
----
+## How To Open It
 
-## Highlights
+- Click the sheep launcher icon.
+- Use `/vg`.
+- Create a macro for `/vg` and bind it if you want faster access.
 
-- Guild roster with Mythic+ information
-- Mythic+ key sync between addon users
-- Invite and whisper actions directly from the roster
-- Seasonal dungeon portals window
-- Click a key to cast its dungeon teleport
-- Great Vault shortcut
-- Mythic+ progress overview
-- Item level sync between addon users
-- Best-for-key tooltip sync across guild members
-- Hearthstone, mage teleport, and toy flyout utilities
-- Full bags, bank, and warband bank replacement
-- Customizable bag currency bar with gold and tracked or selected currencies
-- Account-wide inventory browsing across characters
-- Search for items throughout the guild players inventories (see below)
-- Account-wide Weekly Vault rewards viewer with character switcher
+## Slash Commands
 
----
-
-## Features
-
-### Guild roster
-
-View your guild roster in a compact window with useful Mythic+ and character information.
-
-### Mythic+ key sync
-
-Keys are synchronized between players using the addon.
-
-- Syncs automatically out of combat every minute
-- Syncs on login
-- Syncs on bag updates
-- Displays known keys directly in the roster window
-
-### Invite and whisper from roster
-
-Quickly invite guild members or whisper them directly from the roster UI.
-
-You can also clearly see who is already in your group in the roster window, since their background color changes.
-
-### Seasonal portals window
-
-The portals frame automatically shows the **current season's dungeon portals**.
-
-- Displays cooldowns
-- Unlocked portals are clickable
-
-### Click-to-teleport from keys
-
-Clicking a key in the roster window will cast the corresponding dungeon teleport, if you have it unlocked.
-
-### Great Vault shortcut
-
-A button below the portals frame opens the **Great Vault Rewards** window.
-
-### Account-wide Weekly Vault rewards viewer
-
-Browse current-week Great Vault rewards across your characters in one window.
-
-- Includes a character switcher for saved vault snapshots
-- Lets your current character open Blizzard's live Great Vault directly
-- Makes it easy to compare weekly rewards without logging through every alt
-
-### Mythic+ progress overview
-
-See your best run for each seasonal dungeon at a glance.
-
-- Shows your best key level and completion time
-- **Green** for in-time runs
-- **Red** for over-time runs
-
-### Item level sync
-
-Players with the addon installed can sync their item level with each other.
-
-- Item level is shared between addon users
-- Displayed directly in the roster frame
-
-### Key change reminder
-
-If you time a key and the key currently in your bag is the same level or lower than the key you just completed, the addon shows a large prompt asking whether you want to change it.
-
-### Best-for-key sync
-
-The addon synchronizes each guild member's best run for each dungeon.
-
-Hovering over a key in the roster window shows everyone's best run for that dungeon in the tooltip. This makes it easier to spot opportunities to help guildmates unlock portals or improve their progress.
-
-Example:
-
-> Pete has only completed Dawnbreaker on +9, and you have a +10 key, so you can bring Pete and help him finish his portal.
-
-### Hearthstones above the portals frame
-
-Quick access to hearthstones directly above the portals window.
-
-- **Arcantina teleport** is fixed
-- **Regular Hearthstone** is configurable per character
-- **RANDOM DISCO** can roll a random owned hearthstone each click
-- The addon checks which hearthstone variants you own and lets you choose which one to display
-
-### Mage portals and teleports flyout
-
-If your character is a mage, a flyout menu gives quick access to mage portals and teleports.
-
-### Favorite toys flyout
-
-Configure a set of your most-used toys and access them from a convenient flyout menu without digging through collections.
-
-### Full bags replacement
-
-vesperTools includes a full replacement for the default bags UI.
-
-### Bag currency bar
-
-Add a compact currency strip to the bottom of the bags window for your current character.
-
-- Always shows gold
-- Can follow Blizzard tracked backpack currencies automatically
-- Or you can choose your own currencies in the Bags configuration
-- Currency boxes resize to fit the displayed amount so the bar stays compact
-
-### Full bank replacement
-
-Replace the default bank with a cleaner unified view for easier browsing and management.
-
-### Full warband bank replacement
-
-Includes a full replacement for the warband bank interface.
-
-### Account-wide inventory access
-
-Browse inventory across your characters from one place.
-
-- View bags, bank, and warband bank data account-wide
-- Other characters' inventory is available as **read-only**
-- Makes it easier to locate items without logging through every alt
-
-### Guild wide item search
-
-Search for items in your guild.
-
-- Checkbox in bags window that enables guild search instead of the regular bag search
-- Toggle in configuration that allows others to query your inventory for an item (**Defaults to DISABLED**)
-- Minimum of 4 characters, search starts when you pres enter (not while you type)
-- 30s cooldown (to avoid spamming)
-- Shows additional frame above bags with items matched, player and count
-
----
-
-## How to use
-
-After logging in, a **sheep icon** will appear on your screen.
-
-- **Click the icon** to open the roster
-- Or use the slash command: `/vg`
-- You can also create a macro for `/vg` and bind it to a key
-
-### Slash commands
-
-#### `/vg`
-
-Open the addon.
-
-#### `/vg reset`
-
-Reset the position of the sheep icon and both addon frames.
-
-#### `/vg keys`
-
-Print all currently known keys to chat.
-
-#### `/vg debug`
-
-Show additional debug information.
-
----
+- `/vg`: open the addon
+- `/vg reset`: reset the sheep icon and addon window positions
+- `/vg keys`: print currently known keys to chat
+- `/vg debug`: show extra debug information
 
 ## Notes
 
-Some features, such as key sync, item level sync, and best-run sync, work best when other guild members are also using the addon.
-
-Account-wide inventory browsing depends on characters having been logged in so their inventory data can be collected and displayed.
-
----
-
-## Planned features
-
-- Additional quality-of-life improvements for guild Mythic+ organization
-- Expanded roster and filtering options
-- More utility integrations and shortcut tools
-- Continued polish for inventory and bank views
-
----
-
-## Feature requests
-
-Have an idea for a feature or improvement?
-
-Feel free to let me know.
+- Sync features work best when other guild members also use the addon.
+- Account-wide bags, bank, warband bank, and vault views depend on characters being logged in so their data can be saved.

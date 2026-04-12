@@ -2524,6 +2524,20 @@ function vesperTools:OpenConfig()
     self:Print(L["CONFIG_MODULE_NOT_FOUND"])
 end
 
+function vesperTools:ShowSearchOverlay()
+    local SearchOverlay = self:GetModule("SearchOverlay", true)
+    if SearchOverlay and type(SearchOverlay.ShowOverlay) == "function" then
+        SearchOverlay:ShowOverlay()
+    end
+end
+
+function vesperTools:HideSearchOverlay()
+    local SearchOverlay = self:GetModule("SearchOverlay", true)
+    if SearchOverlay and type(SearchOverlay.HideOverlay) == "function" then
+        SearchOverlay:HideOverlay()
+    end
+end
+
 -- Copy legacy DB globals forward before AceDB opens the modern names.
 local function MigrateLegacySavedVariables()
     if _G[CURRENT_MAIN_DB_NAME] == nil and _G[LEGACY_MAIN_DB_NAME] ~= nil then
@@ -3314,6 +3328,7 @@ function vesperTools:ToggleLauncherWindows()
             end
         end
 
+        self:HideSearchOverlay()
         return true
     end
 
@@ -3328,6 +3343,7 @@ function vesperTools:ToggleLauncherWindows()
     end
 
     self:SendMessage("VESPERTOOLS_ADDON_OPENED")
+    self:ShowSearchOverlay()
     return true
 end
 

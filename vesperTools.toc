@@ -2,7 +2,7 @@
 ## Title: vesperTools
 ## Notes: Various Things for Various other things.
 ## Author: dPanta
-## Version: 3.2.7
+## Version: 4.0.0
 ## IconTexture: Interface\AddOns\vesperTools\Media\vesperTools.png
 ## SavedVariables: vesperToolsDB, vesperToolsBagsDB, VesperGuildDB, VesperGuildBagsDB
 ## X-Wago-ID: XKqAw8Ky
@@ -52,6 +52,8 @@ Modules\KeystoneSync.lua
 Modules\Roster.lua
 Modules\Portals.lua
 Modules\Configuration.lua
+Modules\BlizzardSettingsIndex.lua
+Modules\SearchOverlay.lua
 Modules\Automation.lua
 Modules\GuildLookup.lua
 Modules\BagsStore.lua
