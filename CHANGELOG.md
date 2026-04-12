@@ -1,3 +1,16 @@
+## 4.1.0 - 2026-04-12
+
+### Changed
+- Added a roster double-left-click group action so clicking a guild member row twice now invites them, or requests to join their group when Blizzard exposes that join path.
+- Split roster row interactions so the row itself handles menu and invite actions while the keystone column remains the dedicated portal-cast target.
+
+### Fixed
+- Fixed the roster keystone column so left-clicking the key once again casts the mapped seasonal dungeon portal after the new double-click invite flow was added.
+- Updated the roster tooltip hints to reflect the new double-left-click invite action and the separate left-click key portal behavior.
+
+### Notes
+- This minor release focuses on polishing roster interactions after the larger `4.0.0` launcher-search update.
+
 ## 4.0.0 - 2026-04-12
 
 ### Changed

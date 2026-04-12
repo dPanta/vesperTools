@@ -15,6 +15,7 @@ local ROSTER_SCROLL_STEP = ROSTER_ROW_HEIGHT * 2
 local ROSTER_SCROLLBAR_GUTTER = 27
 local ROSTER_MIN_CONTENT_WIDTH = 520
 local ROSTER_TEXT_INSET = 4
+local ROSTER_DOUBLE_CLICK_THRESHOLD = 0.35
 
 -- Sort arrow indicators (WoW built-in arrow textures)
 local ARROW_UP = " |TInterface\\Buttons\\Arrow-Up-Up:12:12|t"
@@ -102,6 +103,16 @@ local function canRequestJoinGroupForMember(member)
     return canJoin and true or false
 end
 
+local function resolveMemberFullName(memberOrFullName)
+    local member = type(memberOrFullName) == "table" and memberOrFullName or nil
+    local resolvedFullName = strtrim(tostring((member and member.fullName) or memberOrFullName or ""))
+    if resolvedFullName == "" then
+        return nil, member
+    end
+
+    return resolvedFullName, member
+end
+
 -- Build one consistent titlebar action button for roster header controls.
 local function createHeaderActionButton(parent, anchor, width, label, onClick)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
@@ -150,6 +161,8 @@ function Roster:OnInitialize()
     self.rosterRows = {}
     self.currentColumnLayout = nil
     self.pendingRosterRefresh = false
+    self.lastRosterRowClickName = nil
+    self.lastRosterRowClickTime = 0
 end
 
 function Roster:OnEnable()
@@ -311,10 +324,59 @@ end
 
 -- Open manual roster right-click menu with stable cross-client fallbacks.
 function Roster:OpenRosterContextMenu(anchorButton, memberOrFullName)
-    local member = type(memberOrFullName) == "table" and memberOrFullName or nil
-    local resolvedFullName = strtrim(tostring((member and member.fullName) or memberOrFullName or ""))
-    if resolvedFullName == "" then
+    local resolvedFullName, member = resolveMemberFullName(memberOrFullName)
+    if not resolvedFullName then
         return false
+    end
+
+    local function whisperPlayer()
+        if ChatFrame_OpenChat then
+            ChatFrame_OpenChat("/w " .. resolvedFullName .. " ")
+        elseif ChatFrame_SendTell then
+            ChatFrame_SendTell(resolvedFullName)
+        end
+    end
+
+    local primaryActionLabel, primaryActionFunc = self:GetRosterMemberPrimaryAction(member or resolvedFullName)
+
+    if anchorButton and MenuUtil and type(MenuUtil.CreateContextMenu) == "function" then
+        local menuAnchor = self:GetContextMenuAnchor(anchorButton)
+        GameTooltip:Hide()
+        MenuUtil.CreateContextMenu(menuAnchor, function(_, rootDescription)
+            if primaryActionLabel and primaryActionFunc then
+                rootDescription:CreateButton(primaryActionLabel, primaryActionFunc)
+            end
+            rootDescription:CreateButton(L["CONTEXT_MENU_WHISPER"], whisperPlayer)
+            rootDescription:CreateButton(L["CONTEXT_MENU_CLOSE"], function() end)
+        end)
+        return true
+    end
+
+    if EasyMenu then
+        local menu = {}
+        if primaryActionLabel and primaryActionFunc then
+            menu[#menu + 1] = { text = primaryActionLabel, func = primaryActionFunc, notCheckable = true }
+        end
+        menu[#menu + 1] = { text = L["CONTEXT_MENU_WHISPER"], func = whisperPlayer, notCheckable = true }
+        menu[#menu + 1] = { text = L["CONTEXT_MENU_CLOSE"], func = function() end, notCheckable = true }
+        local dropdown = self:GetContextMenuDropdown()
+        GameTooltip:Hide()
+        dropdown:Raise()
+        EasyMenu(menu, dropdown, "cursor", 0, 0, "MENU")
+        return true
+    end
+
+    return false
+end
+
+function Roster:GetRosterMemberPrimaryAction(memberOrFullName)
+    local resolvedFullName, member = resolveMemberFullName(memberOrFullName)
+    if not resolvedFullName then
+        return nil, nil
+    end
+
+    if member and member.guid and member.guid == UnitGUID("player") then
+        return nil, nil
     end
 
     local function invitePlayer()
@@ -335,43 +397,20 @@ function Roster:OpenRosterContextMenu(anchorButton, memberOrFullName)
         end
     end
 
-    local function whisperPlayer()
-        if ChatFrame_OpenChat then
-            ChatFrame_OpenChat("/w " .. resolvedFullName .. " ")
-        elseif ChatFrame_SendTell then
-            ChatFrame_SendTell(resolvedFullName)
-        end
+    if canRequestJoinGroupForMember(member) then
+        return L["CONTEXT_MENU_REQUEST_JOIN"], requestJoinPlayer
     end
 
-    local useRequestJoin = canRequestJoinGroupForMember(member)
-    local primaryActionLabel = useRequestJoin and L["CONTEXT_MENU_REQUEST_JOIN"] or L["CONTEXT_MENU_INVITE"]
-    local primaryActionFunc = useRequestJoin and requestJoinPlayer or invitePlayer
-
-    if anchorButton and MenuUtil and type(MenuUtil.CreateContextMenu) == "function" then
-        local menuAnchor = self:GetContextMenuAnchor(anchorButton)
-        GameTooltip:Hide()
-        MenuUtil.CreateContextMenu(menuAnchor, function(_, rootDescription)
-            rootDescription:CreateButton(primaryActionLabel, primaryActionFunc)
-            rootDescription:CreateButton(L["CONTEXT_MENU_WHISPER"], whisperPlayer)
-            rootDescription:CreateButton(L["CONTEXT_MENU_CLOSE"], function() end)
-        end)
-        return true
+    if member and member.isInGroup then
+        return nil, nil
     end
 
-    if EasyMenu then
-        local menu = {
-            { text = primaryActionLabel, func = primaryActionFunc, notCheckable = true },
-            { text = L["CONTEXT_MENU_WHISPER"], func = whisperPlayer, notCheckable = true },
-            { text = L["CONTEXT_MENU_CLOSE"], func = function() end, notCheckable = true },
-        }
-        local dropdown = self:GetContextMenuDropdown()
-        GameTooltip:Hide()
-        dropdown:Raise()
-        EasyMenu(menu, dropdown, "cursor", 0, 0, "MENU")
-        return true
-    end
+    return L["CONTEXT_MENU_INVITE"], invitePlayer
+end
 
-    return false
+function Roster:ResetRosterRowClickState()
+    self.lastRosterRowClickName = nil
+    self.lastRosterRowClickTime = 0
 end
 
 function Roster:BuildColumnLayout(availableWidth)
@@ -473,15 +512,36 @@ function Roster:LayoutRowColumns(row, columnLayout, fontSize)
 
     local resolvedFontSize = tonumber(fontSize) or vesperTools:GetConfiguredFontSize("roster", 12, 8, 24)
     row:SetSize(columnLayout.totalWidth, ROSTER_ROW_HEIGHT)
+    local keyColumnLayout = nil
 
     for i = 1, #COLUMNS do
         local layout = columnLayout[i]
         local text = row.columns[layout.key]
+        if layout.key == "keyLevel" then
+            keyColumnLayout = layout
+        end
         if text then
             text:ClearAllPoints()
             text:SetPoint("TOPLEFT", row, "TOPLEFT", layout.offset + ROSTER_TEXT_INSET, -1)
             text:SetPoint("BOTTOMRIGHT", row, "TOPLEFT", layout.offset + layout.width - ROSTER_TEXT_INSET, -(ROSTER_ROW_HEIGHT - 1))
             vesperTools:ApplyConfiguredFont(text, resolvedFontSize, "")
+        end
+    end
+
+    if row.button then
+        row.button:SetAllPoints(row)
+    end
+
+    if row.portalButton then
+        row.portalButton:ClearAllPoints()
+        if keyColumnLayout and row.portalSpellName then
+            row.portalButton:SetPoint("TOPLEFT", row, "TOPLEFT", keyColumnLayout.offset, 0)
+            row.portalButton:SetSize(keyColumnLayout.width, ROSTER_ROW_HEIGHT)
+            row.portalButton:EnableMouse(true)
+            row.portalButton:Show()
+        else
+            row.portalButton:EnableMouse(false)
+            row.portalButton:Hide()
         end
     end
 end
@@ -498,6 +558,13 @@ function Roster:HideRosterRows(startIndex)
             row.fullName = nil
             if row.button then
                 row.button.ownerRow = nil
+            end
+            if row.portalButton then
+                row.portalButton.ownerRow = nil
+                row.portalButton:SetAttribute("type1", nil)
+                row.portalButton:SetAttribute("spell1", nil)
+                row.portalButton:EnableMouse(false)
+                row.portalButton:Hide()
             end
             row:Hide()
         end
@@ -766,14 +833,15 @@ function Roster:AcquireRosterRow()
         keyLevel = createRosterText(row, "GameFontHighlightSmall"),
     }
 
-    local actionButton = CreateFrame("Button", nil, row, "InsecureActionButtonTemplate")
-    actionButton:SetPoint("TOPLEFT", row, "TOPLEFT")
-    actionButton:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT")
+    local actionButton = CreateFrame("Button", nil, row)
     actionButton:SetFrameLevel(row:GetFrameLevel() + 1)
-    actionButton:RegisterForClicks("AnyUp", "AnyDown")
-    actionButton:HookScript("OnClick", function(selfButton, button, down)
+    actionButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    actionButton:SetScript("OnClick", function(selfButton, button)
         local ownerRow = selfButton.ownerRow
-        if ownerRow and button == "RightButton" and not down then
+        if ownerRow and button == "LeftButton" then
+            self:HandleRosterRowLeftClick(ownerRow)
+        elseif ownerRow and button == "RightButton" then
+            self:ResetRosterRowClickState()
             self:OpenRosterContextMenu(selfButton, ownerRow.member or ownerRow.fullName)
         end
     end)
@@ -791,8 +859,74 @@ function Roster:AcquireRosterRow()
     end)
     row.button = actionButton
 
+    local portalButton = CreateFrame("Button", nil, row, "InsecureActionButtonTemplate")
+    portalButton:SetFrameLevel(row:GetFrameLevel() + 2)
+    portalButton:RegisterForClicks("AnyUp", "AnyDown")
+    portalButton:HookScript("OnClick", function(selfButton, button, down)
+        local ownerRow = selfButton.ownerRow
+        if button == "LeftButton" then
+            self:ResetRosterRowClickState()
+        elseif ownerRow and button == "RightButton" and not down then
+            self:ResetRosterRowClickState()
+            self:OpenRosterContextMenu(selfButton, ownerRow.member or ownerRow.fullName)
+        end
+    end)
+    portalButton:SetScript("OnEnter", function(selfButton)
+        local ownerRow = selfButton.ownerRow
+        if ownerRow then
+            self:ShowRosterRowTooltip(ownerRow, selfButton)
+        end
+    end)
+    portalButton:SetScript("OnLeave", function(selfButton)
+        local ownerRow = selfButton.ownerRow
+        if ownerRow then
+            self:HideRosterRowTooltip(ownerRow)
+        end
+    end)
+    portalButton:EnableMouse(false)
+    portalButton:Hide()
+    row.portalButton = portalButton
+
     self.rosterRows[#self.rosterRows + 1] = row
     return row
+end
+
+function Roster:HandleRosterRowLeftClick(row)
+    if not row or not row.member then
+        return
+    end
+
+    local _, primaryActionFunc = self:GetRosterMemberPrimaryAction(row.member)
+    if type(primaryActionFunc) ~= "function" then
+        self:ResetRosterRowClickState()
+        return
+    end
+
+    local now = GetTimePreciseSec and GetTimePreciseSec() or GetTime()
+    local fullName = row.fullName or row.member.fullName or row.member.name
+    local previousName = self.lastRosterRowClickName
+    local previousTime = tonumber(self.lastRosterRowClickTime) or 0
+
+    self.lastRosterRowClickName = fullName
+    self.lastRosterRowClickTime = now
+
+    if previousName == fullName and (now - previousTime) <= ROSTER_DOUBLE_CLICK_THRESHOLD then
+        self:ResetRosterRowClickState()
+        primaryActionFunc()
+    end
+end
+
+function Roster:GetRosterTooltipLines(row)
+    local lines = {}
+    local primaryActionLabel = row and row.member and select(1, self:GetRosterMemberPrimaryAction(row.member)) or nil
+    if primaryActionLabel then
+        lines[#lines + 1] = string.format(L["ROSTER_ROW_TOOLTIP_DOUBLE_LEFT_FMT"], primaryActionLabel)
+    end
+    if row and row.portalSpellName then
+        lines[#lines + 1] = string.format(L["ROSTER_ROW_TOOLTIP_KEY_LEFT_FMT"], row.portalSpellName)
+    end
+    lines[#lines + 1] = L["ROSTER_ROW_TOOLTIP_RIGHT_ONLY"]
+    return lines
 end
 
 function Roster:BuildGuildBestTooltip(mapID, dataHandle)
@@ -875,8 +1009,12 @@ function Roster:ShowRosterRowTooltip(row, anchorButton)
     end
 
     GameTooltip:SetOwner(anchorButton, "ANCHOR_TOPLEFT")
-    if row.portalSpellName then
-        GameTooltip:SetText(string.format(L["ROSTER_ROW_TOOLTIP_LEFT_RIGHT_FMT"], row.portalSpellName))
+    local tooltipLines = self:GetRosterTooltipLines(row)
+    if #tooltipLines > 0 then
+        GameTooltip:SetText(tooltipLines[1])
+        for index = 2, #tooltipLines do
+            GameTooltip:AddLine(tooltipLines[index])
+        end
     else
         GameTooltip:SetText(L["ROSTER_ROW_TOOLTIP_RIGHT_ONLY"])
     end
@@ -943,8 +1081,11 @@ function Roster:ConfigureRosterRow(row, member, index, columnLayout, fontSize, d
 
     local button = row.button
     button.ownerRow = row
-    button:SetAttribute("type1", nil)
-    button:SetAttribute("spell1", nil)
+
+    local portalButton = row.portalButton
+    portalButton.ownerRow = row
+    portalButton:SetAttribute("type1", nil)
+    portalButton:SetAttribute("spell1", nil)
 
     row.portalSpellName = nil
     if member.keystoneMapID and dataHandle then
@@ -953,8 +1094,8 @@ function Roster:ConfigureRosterRow(row, member, index, columnLayout, fontSize, d
             local spellName = getSpellName(dungeonInfo.spellID)
             if spellName and isSpellKnownForPlayer(dungeonInfo.spellID) then
                 row.portalSpellName = spellName
-                button:SetAttribute("type1", "spell")
-                button:SetAttribute("spell1", spellName)
+                portalButton:SetAttribute("type1", "spell")
+                portalButton:SetAttribute("spell1", spellName)
             end
         end
     end
@@ -1123,6 +1264,7 @@ end
 function Roster:ShowRoster()
     self:CreateWindow()
     self.pendingRosterRefresh = false
+    self:ResetRosterRowClickState()
     self:ApplyRosterStyling()
     if self.scrollFrame then
         self.scrollFrame:SetVerticalScroll(0)
@@ -1141,6 +1283,7 @@ function Roster:HandleCloseRequest()
     end
 
     self.pendingRosterRefresh = false
+    self:ResetRosterRowClickState()
     self:HideRosterRows(1)
     GameTooltip:Hide()
     vesperTools:HideSearchOverlay()
