@@ -2,7 +2,7 @@
 ## Title: vesperTools
 ## Notes: Various Things for Various other things.
 ## Author: dPanta
-## Version: 4.2.1
+## Version: 4.2.2
 ## IconTexture: Interface\AddOns\vesperTools\Media\vesperTools.png
 ## SavedVariables: vesperToolsDB, vesperToolsBagsDB, VesperGuildDB, VesperGuildBagsDB
 ## X-Wago-ID: XKqAw8Ky

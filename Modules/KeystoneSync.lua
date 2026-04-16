@@ -21,20 +21,36 @@ local DUNGEON_ABBREV = {
     [560] = "MAIS",                 -- Maisara Caverns
 }
 
+local function getOwnedKeystoneLevel()
+    if not C_MythicPlus or type(C_MythicPlus.GetOwnedKeystoneLevel) ~= "function" then
+        return nil
+    end
+
+    local rawLevel = C_MythicPlus.GetOwnedKeystoneLevel()
+    local level = tonumber(rawLevel)
+    if level and level > 0 then
+        return math.floor(level + 0.5)
+    end
+
+    return nil
+end
+
 local function getOwnedKeystoneMapID()
     if not C_MythicPlus then
         return nil
     end
 
     if type(C_MythicPlus.GetOwnedKeystoneChallengeMapID) == "function" then
-        local mapID = tonumber(C_MythicPlus.GetOwnedKeystoneChallengeMapID())
+        local rawMapID = C_MythicPlus.GetOwnedKeystoneChallengeMapID()
+        local mapID = tonumber(rawMapID)
         if mapID and mapID > 0 then
             return math.floor(mapID + 0.5)
         end
     end
 
     if type(C_MythicPlus.GetOwnedKeystoneMapID) == "function" then
-        local mapID = tonumber(C_MythicPlus.GetOwnedKeystoneMapID())
+        local rawMapID = C_MythicPlus.GetOwnedKeystoneMapID()
+        local mapID = tonumber(rawMapID)
         if mapID and mapID > 0 then
             return math.floor(mapID + 0.5)
         end
@@ -250,9 +266,7 @@ end
 
 function KeystoneSync:UpdateCurrentCharacterKeystoneSnapshot()
     local playerName = vesperTools:GetCurrentCharacterFullName()
-    local level = C_MythicPlus and type(C_MythicPlus.GetOwnedKeystoneLevel) == "function"
-        and tonumber(C_MythicPlus.GetOwnedKeystoneLevel())
-        or nil
+    local level = getOwnedKeystoneLevel()
     local mapID = getOwnedKeystoneMapID()
 
     if not level or level <= 0 or not mapID or mapID <= 0 then

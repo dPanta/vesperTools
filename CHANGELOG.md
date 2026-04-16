@@ -1,3 +1,11 @@
+## 4.2.2 - 2026-04-17
+
+### Fixed
+- Fixed the account-keystone snapshot refresh so characters without a fully initialized Mythic+ keystone yet no longer trip a startup Lua error when Blizzard's keystone APIs return no value.
+
+### Notes
+- This hotfix hardens the new account-keystone tracking added in `4.2.0`, especially for freshly progressed level-80 characters who have not fully entered the Mythic+ flow yet.
+
 ## 4.2.1 - 2026-04-16
 
 ### Fixed
