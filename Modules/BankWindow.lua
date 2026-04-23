@@ -282,6 +282,36 @@ function BankWindow:ShowWindow(preferredViewKey)
     self.frame:Raise()
 end
 
+function BankWindow:SyncBlizzardBankView(viewKey)
+    if viewKey ~= "character" and viewKey ~= "warband" then
+        return
+    end
+    if not BankFrame or type(BankFrame.SetTab) ~= "function" then
+        return
+    end
+
+    local store = self:GetStore()
+    if not store then
+        return
+    end
+
+    local isLive = false
+    local tabID = nil
+    if viewKey == "warband" then
+        isLive = type(store.IsWarbandBankLive) == "function" and store:IsWarbandBankLive() or false
+        tabID = BankFrame.accountBankTabID
+    else
+        isLive = type(store.IsCharacterBankLive) == "function" and store:IsCharacterBankLive() or false
+        tabID = BankFrame.characterBankTabID
+    end
+
+    if not isLive or tabID == nil then
+        return
+    end
+
+    pcall(BankFrame.SetTab, BankFrame, tabID)
+end
+
 function BankWindow:SelectDefaultViewForOpen(preferredViewKey)
     local store = self:GetStore()
     local resolvedViewKey = preferredViewKey
@@ -318,6 +348,7 @@ function BankWindow:SelectDefaultViewForOpen(preferredViewKey)
 
     self.displayCharacters = displayCharacters
     self.selectedViewType = resolvedViewKey == "warband" and "warband" or "character"
+    self:SyncBlizzardBankView(self.selectedViewType)
     if bagsProfile then
         bagsProfile.lastViewedBankView = self.selectedViewType
     end
@@ -457,6 +488,7 @@ function BankWindow:SetSelectedView(viewKey)
     end
 
     self.selectedViewType = viewKey
+    self:SyncBlizzardBankView(viewKey)
     if viewKey ~= "character" then
         self:HideCharacterMenu()
     end

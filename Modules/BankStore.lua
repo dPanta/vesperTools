@@ -294,6 +294,14 @@ function BankStore:IsWarbandBankBagID(bagID)
     return ACCOUNT_BANK_BAG_SET[bagID] and true or false
 end
 
+function BankStore:GetBankBagIDsForView(viewKey)
+    if viewKey == "warband" then
+        return ACCOUNT_BANK_BAG_IDS
+    end
+
+    return CHARACTER_BANK_BAG_IDS
+end
+
 function BankStore:CanUseBankType(bankType)
     if not self.bankOpen then
         return false

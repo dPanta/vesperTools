@@ -1,3 +1,17 @@
+## 4.5.0 - 2026-04-23
+
+### Changed
+- Added live bank deposit routing to the bags window so left-clicking or dragging items while a writable bank is open now deposits them into the active character or warband bank view.
+- Synced the vesperTools bank view back to Blizzard's native bank tabs so direct deposits and manual bank interactions stay pointed at the same live destination.
+- Extended the bags overlay interaction rules so those bank-deposit clicks can pass through the custom item overlay instead of being swallowed before the deposit logic runs.
+
+### Fixed
+- Fixed bank deposit targeting so items that can only go into one bank type no longer attempt to route into an invalid character or warband destination.
+- Fixed the fallback deposit path so stackable items still merge into partial stacks and otherwise choose a compatible empty bank bag slot when the direct bank API deposit path is unavailable.
+
+### Notes
+- This minor release is focused on making bank cleanup faster from the bags window, especially while switching between live character-bank and warband-bank views.
+
 ## 4.4.0 - 2026-04-20
 
 ### Changed

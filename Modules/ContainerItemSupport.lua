@@ -447,6 +447,21 @@ function vesperTools:CreateContainerItemController(host, config)
         return self.config.overlayMouseEnabled and true or false
     end
 
+    function controller:GetOverlayPassThroughButtons(button)
+        if type(self.config.overlayPassThroughButtons) == "function" then
+            local buttons = self.config.overlayPassThroughButtons(host, button)
+            if type(buttons) == "table" and #buttons > 0 then
+                return buttons
+            end
+        end
+
+        if button and button.isCombined and self:CanUseCombinedButton(button) then
+            return { "LeftButton" }
+        end
+
+        return nil
+    end
+
     function controller:ShouldUseNativeOverlay(button)
         if not ContainerFrameItemButtonMixin then
             return false
@@ -468,10 +483,9 @@ function vesperTools:CreateContainerItemController(host, config)
         end
 
         local desiredSignature = ""
-        local desiredButtons = nil
-        if button and button.isCombined and self:CanUseCombinedButton(button) then
-            desiredSignature = "LeftButton"
-            desiredButtons = { "LeftButton" }
+        local desiredButtons = self:GetOverlayPassThroughButtons(button)
+        if desiredButtons then
+            desiredSignature = table.concat(desiredButtons, ",")
         end
 
         local currentSignature = overlay.vgPassThroughButtonsSignature

@@ -113,6 +113,18 @@ local function buildFallbackItemName(itemID)
     return string.format(L["ITEM_FALLBACK_FMT"], tostring(itemID))
 end
 
+local function bitBand(a, b)
+    if bit and bit.band then
+        return bit.band(a, b)
+    end
+
+    if bit32 and bit32.band then
+        return bit32.band(a, b)
+    end
+
+    return 0
+end
+
 local function normalizeSearchText(text)
     if type(text) ~= "string" then
         return nil
@@ -293,6 +305,13 @@ function BagsWindow:GetItemInteraction()
         assignContextToButton = function(_, button, context)
             button.isCurrentCharacter = context and context.isCurrentCharacter and true or false
             button.searchCharacterKey = context and context.characterKey or nil
+        end,
+        overlayPassThroughButtons = function(window)
+            if window:HasAnyWritableBankLive() then
+                return { "LeftButton" }
+            end
+
+            return nil
         end,
         afterConfigureButton = function(window, button, record, context)
             local isCurrentCharacter = context and context.isCurrentCharacter and true or false
@@ -3382,6 +3401,208 @@ function BagsWindow:ConfigureTooltip(button)
     end
 end
 
+function BagsWindow:HasAnyWritableBankLive()
+    local bankStore = vesperTools:GetModule("BankStore", true)
+    if not bankStore then
+        return false
+    end
+
+    local characterIsLive = type(bankStore.IsCharacterBankLive) == "function" and bankStore:IsCharacterBankLive() or false
+    local warbandIsLive = type(bankStore.IsWarbandBankLive) == "function" and bankStore:IsWarbandBankLive() or false
+    return characterIsLive or warbandIsLive
+end
+
+function BagsWindow:ShouldBypassBankDepositRouting()
+    if CursorHasItem and CursorHasItem() then
+        return true
+    end
+
+    if SpellIsTargeting and SpellIsTargeting() then
+        return true
+    end
+
+    return false
+end
+
+function BagsWindow:GetActiveDepositBankViewKey()
+    local bankStore = vesperTools:GetModule("BankStore", true)
+    if not bankStore then
+        return nil
+    end
+
+    local BankWindow = vesperTools:GetModule("BankWindow", true)
+    if BankWindow and BankWindow.frame and BankWindow.frame:IsShown() then
+        local selectedViewKey = BankWindow.selectedViewType == "warband" and "warband" or "character"
+        if selectedViewKey == "warband" then
+            if type(bankStore.IsWarbandBankLive) == "function" and bankStore:IsWarbandBankLive() then
+                return "warband"
+            end
+        elseif type(bankStore.IsCharacterBankLive) == "function" and bankStore:IsCharacterBankLive() then
+            return "character"
+        end
+    end
+
+    local bridge = vesperTools:GetModule("BagsBridge", true)
+    if bridge and type(bridge.ResolvePreferredBankViewKey) == "function" then
+        local resolvedViewKey = bridge:ResolvePreferredBankViewKey()
+        if resolvedViewKey == "warband" or resolvedViewKey == "character" then
+            return resolvedViewKey
+        end
+    end
+
+    if type(bankStore.IsCharacterBankLive) == "function" and bankStore:IsCharacterBankLive() then
+        return "character"
+    end
+    if type(bankStore.IsWarbandBankLive) == "function" and bankStore:IsWarbandBankLive() then
+        return "warband"
+    end
+
+    return nil
+end
+
+function BagsWindow:IsItemAllowedInBankType(bagID, slotID, bankType)
+    if not C_Bank or type(C_Bank.IsItemAllowedInBankType) ~= "function" then
+        return true
+    end
+    if not ItemLocation or not C_Item or type(C_Item.GetItemGUID) ~= "function" then
+        return true
+    end
+
+    local itemLocation = ItemLocation:CreateFromBagAndSlot(bagID, slotID)
+    if not itemLocation or not itemLocation:IsValid() or not itemLocation:IsBagAndSlot() then
+        return true
+    end
+
+    local ok, isAllowed = pcall(C_Bank.IsItemAllowedInBankType, bankType, itemLocation)
+    if not ok then
+        return true
+    end
+
+    return isAllowed and true or false
+end
+
+function BagsWindow:CanEmptyBankSlotHoldItem(targetBagID, itemInfo)
+    if not itemInfo or not targetBagID then
+        return false
+    end
+
+    if not C_Container or type(C_Container.GetContainerNumFreeSlots) ~= "function" then
+        return true
+    end
+
+    local _, bagFamily = C_Container.GetContainerNumFreeSlots(targetBagID)
+    bagFamily = tonumber(bagFamily) or 0
+    if bagFamily == 0 then
+        return true
+    end
+
+    if not GetItemFamily then
+        return false
+    end
+
+    local itemFamily = tonumber(GetItemFamily(itemInfo.hyperlink or itemInfo.itemID)) or 0
+    if itemFamily == 0 then
+        return false
+    end
+
+    return bitBand(itemFamily, bagFamily) ~= 0
+end
+
+function BagsWindow:FindDepositTargetSlot(sourceBagID, sourceSlotID, targetBagIDs)
+    if not sourceBagID or not sourceSlotID or type(targetBagIDs) ~= "table" then
+        return nil, nil
+    end
+    if not C_Container
+        or type(C_Container.GetContainerItemInfo) ~= "function"
+        or type(C_Container.GetContainerNumSlots) ~= "function"
+    then
+        return nil, nil
+    end
+
+    local sourceInfo = C_Container.GetContainerItemInfo(sourceBagID, sourceSlotID)
+    if not sourceInfo or not sourceInfo.itemID then
+        return nil, nil
+    end
+
+    local maxStackCount = tonumber(select(8, GetItemInfo(sourceInfo.hyperlink or sourceInfo.itemID))) or 1
+    local emptyBagID, emptySlotID = nil, nil
+
+    for i = 1, #targetBagIDs do
+        local targetBagID = targetBagIDs[i]
+        local slotCount = tonumber(C_Container.GetContainerNumSlots(targetBagID)) or 0
+        for targetSlotID = 1, slotCount do
+            local targetInfo = C_Container.GetContainerItemInfo(targetBagID, targetSlotID)
+            if targetInfo and targetInfo.itemID then
+                if not targetInfo.isLocked
+                    and targetInfo.itemID == sourceInfo.itemID
+                    and (tonumber(targetInfo.stackCount) or 1) < maxStackCount
+                then
+                    return targetBagID, targetSlotID
+                end
+            elseif not emptyBagID and self:CanEmptyBankSlotHoldItem(targetBagID, sourceInfo) then
+                emptyBagID, emptySlotID = targetBagID, targetSlotID
+            end
+        end
+    end
+
+    return emptyBagID, emptySlotID
+end
+
+function BagsWindow:TryDepositItemIntoActiveBank(button)
+    if InCombatLockdown() then
+        return false
+    end
+    if self:ShouldBypassBankDepositRouting() then
+        return false
+    end
+    if not C_Container or type(C_Container.PickupContainerItem) ~= "function" then
+        return false
+    end
+
+    local itemInteraction = self:GetItemInteraction()
+    local sourceBagID, sourceSlotID = nil, nil
+    if itemInteraction then
+        sourceBagID, sourceSlotID = itemInteraction:GetButtonBagSlot(button, false)
+    end
+    if not sourceBagID or not sourceSlotID then
+        return false
+    end
+
+    local viewKey = self:GetActiveDepositBankViewKey()
+    if viewKey ~= "character" and viewKey ~= "warband" then
+        return false
+    end
+
+    local bankStore = vesperTools:GetModule("BankStore", true)
+    if not bankStore or type(bankStore.GetBankBagIDsForView) ~= "function" then
+        return false
+    end
+
+    local bankType = viewKey == "warband"
+        and (Enum and Enum.BankType and Enum.BankType.Account or nil)
+        or (Enum and Enum.BankType and Enum.BankType.Character or nil)
+    if bankType ~= nil and not self:IsItemAllowedInBankType(sourceBagID, sourceSlotID, bankType) then
+        return false
+    end
+
+    if bankType ~= nil and type(C_Container.UseContainerItem) == "function" then
+        local ok = pcall(C_Container.UseContainerItem, sourceBagID, sourceSlotID, nil, bankType)
+        if ok then
+            return true
+        end
+    end
+
+    local targetBagIDs = bankStore:GetBankBagIDsForView(viewKey)
+    local targetBagID, targetSlotID = self:FindDepositTargetSlot(sourceBagID, sourceSlotID, targetBagIDs)
+    if not targetBagID or not targetSlotID then
+        return false
+    end
+
+    C_Container.PickupContainerItem(sourceBagID, sourceSlotID)
+    C_Container.PickupContainerItem(targetBagID, targetSlotID)
+    return true
+end
+
 function BagsWindow:HandleItemEnter(button)
     self:ConfigureTooltip(button)
 end
@@ -3389,6 +3610,13 @@ end
 function BagsWindow:HandleItemDrag(button)
     if self.layoutEditMode then
         return
+    end
+
+    if self:HasAnyWritableBankLive() then
+        if not self:ShouldBypassBankDepositRouting() then
+            self:TryDepositItemIntoActiveBank(button)
+            return
+        end
     end
 
     local itemInteraction = self:GetItemInteraction()
@@ -3419,6 +3647,18 @@ end
 function BagsWindow:HandleItemClick(button, mouseButton)
     if self.layoutEditMode then
         return
+    end
+
+    if mouseButton == "LeftButton" and self:HasAnyWritableBankLive() then
+        local hyperlink = button and button.hyperlink
+        if type(hyperlink) == "string" and hyperlink ~= "" and HandleModifiedItemClick and HandleModifiedItemClick(hyperlink) then
+            return
+        end
+
+        if not self:ShouldBypassBankDepositRouting() then
+            self:TryDepositItemIntoActiveBank(button)
+            return
+        end
     end
 
     local itemInteraction = self:GetItemInteraction()
