@@ -75,12 +75,32 @@ function Automation:OnDisable()
     CommAdapter:UnregisterOwner(self)
 end
 
+function Automation:RefreshKeystonesAndPortals(options)
+    options = type(options) == "table" and options or {}
+
+    local KeystoneSync = vesperTools:GetModule("KeystoneSync", true)
+    if KeystoneSync and type(KeystoneSync.RefreshKeystoneData) == "function" then
+        KeystoneSync:RefreshKeystoneData({
+            requestGuild = options.requestGuild,
+            silent = options.silent,
+        })
+    elseif KeystoneSync and options.requestGuild ~= false and type(KeystoneSync.RequestGuildKeystones) == "function" then
+        KeystoneSync:RequestGuildKeystones({ silent = options.silent })
+    end
+
+    local Portals = vesperTools:GetModule("Portals", true)
+    if Portals and type(Portals.ForceRefreshPortalAvailability) == "function" then
+        Portals:ForceRefreshPortalAvailability()
+    end
+end
+
 -- Trigger a full guild sync pass when the main addon UI opens.
 function Automation:OnAddonOpened()
     -- Full refresh pass: publish local data and request peers to publish theirs.
     self:BroadcastIlvl()
     self:BroadcastBestKeys()
     self:RequestBestKeys()
+    self:RefreshKeystonesAndPortals({ requestGuild = true, silent = true })
 end
 
 function Automation:TestKeyReminder()
@@ -332,5 +352,6 @@ function Automation:ManualSync()
     self:BroadcastIlvl()
     self:BroadcastBestKeys()
     self:RequestBestKeys()
+    self:RefreshKeystonesAndPortals({ requestGuild = true, silent = false })
     vesperTools:Print(L["SYNC_BROADCASTED_MESSAGE"])
 end

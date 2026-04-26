@@ -17,31 +17,6 @@ local TOY_FLYOUT_ANCHOR_Y_OFFSET = 8
 local TOY_FLYOUT_SCREEN_MARGIN = 10
 local COOLDOWN_TEXT_UPDATE_INTERVAL = 0.1
 
-local function isSpellKnownForPlayer(spellID)
-    local normalizedSpellID = tonumber(spellID)
-    if not normalizedSpellID or normalizedSpellID <= 0 then
-        return false
-    end
-
-    if C_SpellBook and C_SpellBook.IsSpellInSpellBook and C_SpellBook.IsSpellInSpellBook(normalizedSpellID) then
-        return true
-    end
-
-    if IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(normalizedSpellID) then
-        return true
-    end
-
-    if IsSpellKnown and IsSpellKnown(normalizedSpellID) then
-        return true
-    end
-
-    if IsPlayerSpell and IsPlayerSpell(normalizedSpellID) then
-        return true
-    end
-
-    return false
-end
-
 -- Curated mage travel catalogs. We still supplement this with spellbook scanning so
 -- newly added/seasonal travel spells can appear without hardcoding every edge case.
 local MAGE_TELEPORT_SPELL_IDS = {
@@ -171,9 +146,11 @@ end
 function Portals:OnInitialize()
     -- Tracks deferred secure-button updates blocked by combat lockdown.
     self.pendingUtilityRefresh = false
+    self.pendingDungeonPortalRefresh = false
     self.isMage = false
     self.knownMageTeleportSpells = {}
     self.knownMagePortalSpells = {}
+    self.portalButtons = {}
     self.toyFlyoutButtons = {}
     self.toyFlyoutColumnBackgrounds = {}
     self.cooldownButtons = {}
@@ -204,7 +181,10 @@ end
 
 function Portals:PLAYER_LOGIN()
     AddonServices:RegisterChatCommand(self, "vesperportals", "Toggle")
+    AddonServices:RegisterChatCommand(self, "vesperportalspells", "DebugDumpDungeonPortalSpells")
     self:CreatePortalFrame()
+    self:ScheduleDungeonPortalRefresh(0.25)
+    self:ScheduleDungeonPortalRefresh(1.50)
 end
 
 -- Refresh hearthstone buttons when bag contents change.
@@ -226,6 +206,7 @@ end
 
 -- Refresh mage travel menus/icons when spellbook changes (newly learned spells, etc.).
 function Portals:SPELLS_CHANGED()
+    self:RefreshDungeonPortalButtons()
     self:RefreshMageTravelButtons()
     self:RefreshActionCooldowns()
 end
@@ -236,6 +217,11 @@ end
 
 -- Combat lockdown can block secure attribute writes; apply queued updates here.
 function Portals:PLAYER_REGEN_ENABLED()
+    if self.pendingDungeonPortalRefresh then
+        self.pendingDungeonPortalRefresh = false
+        self:RefreshDungeonPortalButtons()
+    end
+
     if self.pendingUtilityRefresh then
         self.pendingUtilityRefresh = false
         self:LayoutTopUtilityButtons()
@@ -316,7 +302,7 @@ function Portals:GetKnownMageTravelSpells(kind)
             return
         end
 
-        local known = isSpellKnownForPlayer(spellID)
+        local known = vesperTools:IsSpellKnownForPlayer(spellID)
         if not known then
             return
         end
@@ -844,6 +830,125 @@ function Portals:RefreshActionCooldowns()
         end)
     elseif self.VesperPortalsUI then
         self.VesperPortalsUI:SetScript("OnUpdate", nil)
+    end
+end
+
+function Portals:ScheduleDungeonPortalRefresh(delaySeconds)
+    if not C_Timer or type(C_Timer.After) ~= "function" then
+        return
+    end
+
+    C_Timer.After(math.max(0, tonumber(delaySeconds) or 0), function()
+        if self and type(self.RefreshDungeonPortalButtons) == "function" then
+            self:RefreshDungeonPortalButtons()
+        end
+    end)
+end
+
+function Portals:ApplyDungeonPortalButtonState(button)
+    if not button then
+        return false
+    end
+
+    local spellID = tonumber(button.portalSpellID)
+    if not spellID then
+        button:EnableMouse(false)
+        self:SetButtonCooldownSource(button, nil, nil)
+        return false
+    end
+
+    local spellInfo = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+    local spellName = (spellInfo and spellInfo.name) or button.portalSpellName
+    local iconFileID = spellInfo and (spellInfo.iconID or spellInfo.originalIconID)
+    local known = spellName and vesperTools:IsSpellKnownForPlayer(spellID)
+
+    button.portalSpellName = spellName
+    if button.icon then
+        if iconFileID then
+            button.icon:SetTexture(iconFileID)
+        end
+        button.icon:SetDesaturated(not known)
+        button.icon:SetAlpha(known and 1 or 0.5)
+    end
+
+    if known then
+        button:EnableMouse(true)
+        button:SetAttribute("type1", "spell")
+        button:SetAttribute("spell1", spellName)
+        self:SetButtonCooldownSource(button, "spell", spellID)
+    else
+        button:EnableMouse(false)
+        button:SetAttribute("type1", nil)
+        button:SetAttribute("spell1", nil)
+        self:SetButtonCooldownSource(button, nil, nil)
+    end
+
+    return known and true or false
+end
+
+function Portals:RefreshDungeonPortalButtons()
+    if type(InCombatLockdown) == "function" and InCombatLockdown() then
+        self.pendingDungeonPortalRefresh = true
+        return false
+    end
+
+    local buttons = self.portalButtons
+    if type(buttons) ~= "table" or #buttons == 0 then
+        return false
+    end
+
+    local knownCount = 0
+    for index = 1, #buttons do
+        if self:ApplyDungeonPortalButtonState(buttons[index]) then
+            knownCount = knownCount + 1
+        end
+    end
+
+    self:RefreshActionCooldowns()
+    vesperTools:SendMessage("VESPERTOOLS_PORTAL_SPELLS_REFRESHED", knownCount, #buttons)
+    return true, knownCount, #buttons
+end
+
+function Portals:ForceRefreshPortalAvailability()
+    local refreshed, knownCount, totalCount = self:RefreshDungeonPortalButtons()
+    self:RefreshMageTravelButtons()
+    self:RefreshActionCooldowns()
+    return refreshed
+end
+
+function Portals:DebugDumpDungeonPortalSpells()
+    local dataHandle = vesperTools:GetModule("DataHandle", true)
+    if not dataHandle then
+        vesperTools:Print(L["PORTALS_DATAHANDLE_MODULE_NOT_FOUND"])
+        return
+    end
+
+    local curSeason = C_ChallengeMode and C_ChallengeMode.GetMapTable and C_ChallengeMode.GetMapTable() or {}
+    if #curSeason == 0 then
+        vesperTools:Print("No current-season dungeon portal map table is available.")
+        return
+    end
+
+    self:RefreshDungeonPortalButtons()
+    vesperTools:Print("Current character dungeon portal spell check:")
+
+    for index = 1, #curSeason do
+        local mapID = curSeason[index]
+        local dungInfo = dataHandle:GetDungeonByMapID(mapID)
+        if dungInfo then
+            local spellInfo = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(dungInfo.spellID)
+            local spellName = (spellInfo and spellInfo.name) or tostring(dungInfo.spellID)
+            local known, source = vesperTools:GetPlayerSpellKnownState(dungInfo.spellID)
+            vesperTools:Print(string.format(
+                "%s (%d): %s [%d] = %s via %s",
+                dungInfo.dungeonName or tostring(mapID),
+                mapID,
+                spellName,
+                dungInfo.spellID,
+                known and "known" or "missing",
+                source or "unknown"
+            ))
+        end
     end
 end
 
@@ -1645,12 +1750,12 @@ function Portals:CreatePortalFrame()
         end
     end
 
+    self.portalButtons = {}
     local index = 1
     for _, dungInfo in ipairs(curSeasonDungs) do
             local spellInfo = C_Spell.GetSpellInfo(dungInfo.spellID)
             local spellName = spellInfo and spellInfo.name
             local iconFileID = spellInfo and (spellInfo.iconID or spellInfo.originalIconID)
-            local known = isSpellKnownForPlayer(dungInfo.spellID)
             local btn = CreateFrame(
                 "Button",
                 "PortalButton" .. index,
@@ -1684,22 +1789,11 @@ function Portals:CreatePortalFrame()
             -- Cooldown swipe + numeric counter
             self:EnsureCooldownOverlay(btn)
 
-            -- Disable click when portal spell is not learned.
-            -- This avoids secure-action errors and matches visual desaturation state.
-            if not known then
-				icon:SetDesaturated(true)
-				icon:SetAlpha(0.5)
-				btn:EnableMouse(false)
-                self:SetButtonCooldownSource(btn, nil, nil)
-			else
-				icon:SetDesaturated(false)
-				icon:SetAlpha(1)
-				btn:EnableMouse(true)
-                self:SetButtonCooldownSource(btn, "spell", dungInfo.spellID)
-			end
-
             -- Tooltip
             btn.dungeonName = dungInfo.dungeonName
+            btn.portalSpellID = dungInfo.spellID
+            btn.portalSpellName = spellName
+            self.portalButtons[#self.portalButtons + 1] = btn
             btn:SetScript("OnEnter", function(portalButton)
                 GameTooltip:SetOwner(portalButton, "ANCHOR_RIGHT")
                 GameTooltip:SetText(portalButton.dungeonName, 1, 1, 1)
@@ -1710,9 +1804,8 @@ function Portals:CreatePortalFrame()
             end)
 
             -- Clickitty Click
-            btn:SetAttribute("type1", "spell")
-            btn:SetAttribute("spell1", spellName)
             btn:RegisterForClicks("AnyUp", "AnyDown")
+            self:ApplyDungeonPortalButtonState(btn)
 
             index = index + 1
         end
@@ -2132,6 +2225,7 @@ function Portals:Toggle()
         self:HandleCloseRequest()
     else
         -- Rebuild each open so current-season best run and account key data stay fresh.
+        self:RefreshDungeonPortalButtons()
         self:RebuildProgressFrames()
         self.VesperPortalsUI:Show()
         self.VesperPortalsUI:Raise()

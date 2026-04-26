@@ -1,3 +1,16 @@
+## 4.5.1 - 2026-04-26
+
+### Changed
+- Added a shared current-character spell knowledge check for dungeon portals and roster key portal casts, using the modern spellbook APIs first so portal availability is less likely to bleed between characters.
+- Wired the roster Sync button, `/vg sync`, and launcher-open refresh path to also refresh current-character keystone data, guild keystone requests, and dungeon portal spell availability.
+
+### Fixed
+- Fixed dungeon portal buttons staying disabled after login or spellbook updates by rechecking portal spell availability on delayed login retries, `SPELLS_CHANGED`, portal-window open, and manual sync.
+- Updated current-character keystone refreshes to store the local roster keystone snapshot directly instead of depending on receiving a guild echo.
+
+### Notes
+- This hotfix focuses on alt correctness: if a character just unlocked a dungeon portal, pressing Sync now forces the portal buttons and roster key-cast targets to re-evaluate that character's spellbook.
+
 ## 4.5.0 - 2026-04-23
 
 ### Changed

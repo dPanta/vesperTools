@@ -37,31 +37,6 @@ for i = 1, #COLUMNS do
     TOTAL_COLUMN_WEIGHT = TOTAL_COLUMN_WEIGHT + (tonumber(COLUMNS[i].width) or 0)
 end
 
-local function isSpellKnownForPlayer(spellID)
-    local normalizedSpellID = tonumber(spellID)
-    if not normalizedSpellID or normalizedSpellID <= 0 then
-        return false
-    end
-
-    if C_SpellBook and C_SpellBook.IsSpellInSpellBook and C_SpellBook.IsSpellInSpellBook(normalizedSpellID) then
-        return true
-    end
-
-    if IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(normalizedSpellID) then
-        return true
-    end
-
-    if IsSpellKnown and IsSpellKnown(normalizedSpellID) then
-        return true
-    end
-
-    if IsPlayerSpell and IsPlayerSpell(normalizedSpellID) then
-        return true
-    end
-
-    return false
-end
-
 local function getSpellName(spellID)
     if not spellID then
         return nil
@@ -172,6 +147,7 @@ function Roster:OnEnable()
     self:RegisterMessage("VESPERTOOLS_ILVL_UPDATE", "OnSyncUpdate")
     self:RegisterMessage("VESPERTOOLS_BESTKEYS_UPDATE", "OnSyncUpdate")
     self:RegisterMessage("VESPERTOOLS_KEYSTONE_UPDATE", "OnSyncUpdate")
+    self:RegisterMessage("VESPERTOOLS_PORTAL_SPELLS_REFRESHED", "OnSyncUpdate")
     self:RegisterMessage("VESPERTOOLS_CONFIG_CHANGED", "OnConfigChanged")
 end
 
@@ -716,13 +692,21 @@ function Roster:CreateWindow()
     end)
 
     local syncBtn = createHeaderActionButton(titlebar, closeBtn, 72, L["ROSTER_BUTTON_SYNC"], function()
-        local KeystoneSync = vesperTools:GetModule("KeystoneSync", true)
-        if KeystoneSync then
-            KeystoneSync:RequestGuildKeystones()
-        end
         local Auto = vesperTools:GetModule("Automation", true)
-        if Auto then
+        if Auto and type(Auto.ManualSync) == "function" then
             Auto:ManualSync()
+        else
+            local KeystoneSync = vesperTools:GetModule("KeystoneSync", true)
+            if KeystoneSync and type(KeystoneSync.RefreshKeystoneData) == "function" then
+                KeystoneSync:RefreshKeystoneData({ requestGuild = true, silent = false })
+            elseif KeystoneSync and type(KeystoneSync.RequestGuildKeystones) == "function" then
+                KeystoneSync:RequestGuildKeystones()
+            end
+
+            local Portals = vesperTools:GetModule("Portals", true)
+            if Portals and type(Portals.ForceRefreshPortalAvailability) == "function" then
+                Portals:ForceRefreshPortalAvailability()
+            end
         end
         self:RequestRosterRefresh()
     end)
@@ -1135,7 +1119,7 @@ function Roster:ConfigureRosterRow(row, member, index, columnLayout, fontSize, d
         local dungeonInfo = dataHandle:GetDungeonByMapID(member.keystoneMapID)
         if dungeonInfo then
             local spellName = getSpellName(dungeonInfo.spellID)
-            if spellName and isSpellKnownForPlayer(dungeonInfo.spellID) then
+            if spellName and vesperTools:IsSpellKnownForPlayer(dungeonInfo.spellID) then
                 row.portalSpellName = spellName
                 portalButton:SetAttribute("type1", "spell")
                 portalButton:SetAttribute("spell1", spellName)

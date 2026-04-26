@@ -43,6 +43,63 @@ function vesperTools:RegisterChatCommand(command, func)
     return AddonServices:RegisterChatCommand(self, command, func)
 end
 
+local function callSpellKnowledgeAPI(apiFunc, spellID)
+    if type(apiFunc) ~= "function" then
+        return false
+    end
+
+    local ok, result = pcall(apiFunc, spellID)
+    return ok and result and true or false
+end
+
+function vesperTools:GetPlayerSpellKnownState(spellID)
+    local normalizedSpellID = tonumber(spellID)
+    if not normalizedSpellID or normalizedSpellID <= 0 then
+        return false, "invalid"
+    end
+
+    if C_SpellBook then
+        local checkedModernAPI = false
+
+        if type(C_SpellBook.IsSpellKnown) == "function" then
+            checkedModernAPI = true
+            if callSpellKnowledgeAPI(C_SpellBook.IsSpellKnown, normalizedSpellID) then
+                return true, "C_SpellBook.IsSpellKnown"
+            end
+        end
+
+        if type(C_SpellBook.IsSpellInSpellBook) == "function" then
+            checkedModernAPI = true
+            if callSpellKnowledgeAPI(C_SpellBook.IsSpellInSpellBook, normalizedSpellID) then
+                return true, "C_SpellBook.IsSpellInSpellBook"
+            end
+        end
+
+        if checkedModernAPI then
+            return false, "C_SpellBook"
+        end
+    end
+
+    if callSpellKnowledgeAPI(IsSpellKnownOrOverridesKnown, normalizedSpellID) then
+        return true, "IsSpellKnownOrOverridesKnown"
+    end
+
+    if callSpellKnowledgeAPI(IsSpellKnown, normalizedSpellID) then
+        return true, "IsSpellKnown"
+    end
+
+    if callSpellKnowledgeAPI(IsPlayerSpell, normalizedSpellID) then
+        return true, "IsPlayerSpell"
+    end
+
+    return false, "none"
+end
+
+function vesperTools:IsSpellKnownForPlayer(spellID)
+    local known = self:GetPlayerSpellKnownState(spellID)
+    return known and true or false
+end
+
 -- Current and legacy DB names are kept side-by-side for transparent migration.
 local CURRENT_MAIN_DB_NAME = "vesperToolsDB"
 local CURRENT_BAGS_DB_NAME = "vesperToolsBagsDB"
@@ -3869,6 +3926,13 @@ function vesperTools:HandleChatCommand(input)
             KeystoneSync:DebugDumpKeystones()
         else
             self:Print(L["KEYSTONE_SYNC_MODULE_NOT_FOUND"])
+        end
+    elseif loweredInput == "portalspells" or loweredInput == "portalsdebug" then
+        local Portals = self:GetModule("Portals", true)
+        if Portals and type(Portals.DebugDumpDungeonPortalSpells) == "function" then
+            Portals:DebugDumpDungeonPortalSpells()
+        else
+            self:Print(L["PORTALS_MODULE_WARNING"])
         end
     elseif loweredInput == "bestkeys" then
         -- Debug: Dump best keys database

@@ -59,6 +59,17 @@ local function getOwnedKeystoneMapID()
     return nil
 end
 
+local function getPlayerMythicPlusRating()
+    if C_PlayerInfo and type(C_PlayerInfo.GetPlayerMythicPlusRatingSummary) == "function" then
+        local summary = C_PlayerInfo.GetPlayerMythicPlusRatingSummary("player")
+        if type(summary) == "table" and type(summary.currentSeasonScore) == "number" then
+            return summary.currentSeasonScore
+        end
+    end
+
+    return 0
+end
+
 function KeystoneSync:OnEnable()
     -- Register LibKeystone callback for receiving keystone data
     if LibKeystone then
@@ -131,15 +142,21 @@ function KeystoneSync:OnLibKeystoneReceived(keyLevel, keyChallengeMapID, playerR
     vesperTools:SendMessage("VESPERTOOLS_KEYSTONE_UPDATE", sender)
 end
 
--- Request keystones from guild using LibKeystone
-function KeystoneSync:RequestGuildKeystones()
+-- Request keystones from guild using LibKeystone.
+function KeystoneSync:RequestGuildKeystones(options)
+    local silent = type(options) == "table" and options.silent
+
     if not LibKeystone then
-        vesperTools:Print(L["LIBKEYSTONE_NOT_LOADED"])
+        if not silent then
+            vesperTools:Print(L["LIBKEYSTONE_NOT_LOADED"])
+        end
         return false
     end
 
     if not IsInGuild() then
-        vesperTools:Print(L["PLAYER_NOT_IN_GUILD"])
+        if not silent then
+            vesperTools:Print(L["PLAYER_NOT_IN_GUILD"])
+        end
         return false
     end
 
@@ -147,7 +164,9 @@ function KeystoneSync:RequestGuildKeystones()
     -- This will trigger all guild members running LibKeystone to respond with their keystone data
     LibKeystone.Request("GUILD")
 
-    vesperTools:Print(L["REQUESTING_KEYSTONES"])
+    if not silent then
+        vesperTools:Print(L["REQUESTING_KEYSTONES"])
+    end
     return true
 end
 
@@ -159,14 +178,32 @@ function KeystoneSync:StoreKeystone(playerName, mapID, level, rating)
 
     if mapID == 0 or level == 0 then
         -- Remove entry so callers can treat missing row as "no key".
-        vesperTools.db.global.keystones[playerName] = nil
+        if vesperTools.db.global.keystones[playerName] ~= nil then
+            vesperTools.db.global.keystones[playerName] = nil
+            return true
+        end
+        return false
     else
+        local existing = vesperTools.db.global.keystones[playerName]
+        local numericMapID = tonumber(mapID) or 0
+        local numericLevel = tonumber(level) or 0
+        local numericRating = tonumber(rating) or 0
+        if existing
+            and existing.mapID == numericMapID
+            and existing.level == numericLevel
+            and existing.rating == numericRating
+        then
+            existing.timestamp = time()
+            return false
+        end
+
         vesperTools.db.global.keystones[playerName] = {
-            mapID = mapID,
-            level = level,
-            rating = rating or 0,  -- Store M+ rating, default to 0 if not provided
+            mapID = numericMapID,
+            level = numericLevel,
+            rating = numericRating,  -- Store M+ rating, default to 0 if not provided
             timestamp = time()
         }
+        return true
     end
 end
 
@@ -268,12 +305,39 @@ function KeystoneSync:UpdateCurrentCharacterKeystoneSnapshot()
     local playerName = vesperTools:GetCurrentCharacterFullName()
     local level = getOwnedKeystoneLevel()
     local mapID = getOwnedKeystoneMapID()
+    local rating = getPlayerMythicPlusRating()
+    local rosterChanged
 
     if not level or level <= 0 or not mapID or mapID <= 0 then
-        return self:StoreAccountKeystone(playerName, 0, 0)
+        rosterChanged = self:StoreKeystone(playerName, 0, 0, rating)
+        local accountChanged = self:StoreAccountKeystone(playerName, 0, 0)
+        if rosterChanged then
+            vesperTools:SendMessage("VESPERTOOLS_KEYSTONE_UPDATE", playerName)
+        end
+        return accountChanged or rosterChanged
     end
 
-    return self:StoreAccountKeystone(playerName, mapID, level)
+    rosterChanged = self:StoreKeystone(playerName, mapID, level, rating)
+    local accountChanged = self:StoreAccountKeystone(playerName, mapID, level)
+    if rosterChanged then
+        vesperTools:SendMessage("VESPERTOOLS_KEYSTONE_UPDATE", playerName)
+    end
+    return accountChanged or rosterChanged
+end
+
+function KeystoneSync:RefreshKeystoneData(options)
+    options = type(options) == "table" and options or {}
+
+    local playerName = vesperTools:GetCurrentCharacterFullName()
+    local accountChanged = self:UpdateCurrentCharacterKeystoneSnapshot()
+    local guildRequested = false
+
+    if options.requestGuild ~= false then
+        guildRequested = self:RequestGuildKeystones({ silent = options.silent })
+    end
+
+    vesperTools:SendMessage("VESPERTOOLS_KEYSTONE_UPDATE", playerName)
+    return accountChanged, guildRequested
 end
 
 function KeystoneSync:PLAYER_ENTERING_WORLD()
