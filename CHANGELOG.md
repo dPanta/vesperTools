@@ -1,15 +1,20 @@
-## 4.5.1 - 2026-04-26
+## 4.6.0 - 2026-04-27
 
 ### Changed
 - Added a shared current-character spell knowledge check for dungeon portals and roster key portal casts, using the modern spellbook APIs first so portal availability is less likely to bleed between characters.
 - Wired the roster Sync button, `/vg sync`, and launcher-open refresh path to also refresh current-character keystone data, guild keystone requests, and dungeon portal spell availability.
+- Added `Blizz` buttons in the bags window and next to the roster Bags button that open Blizzard's default bags without routing back into the replacement window.
+- Reworked replacement-bag item activation to follow Blizzard's native live container item button flow, matching the safer pattern used by established bag addons.
 
 ### Fixed
 - Fixed dungeon portal buttons staying disabled after login or spellbook updates by rechecking portal spell availability on delayed login retries, `SPELLS_CHANGED`, portal-window open, and manual sync.
+- Restored replacement-bag right-click item use through Blizzard's native container item button path, with left-click and drag behavior still passing through to vesperTools.
+- Kept secure item attributes only as a fallback when the native container item button template is unavailable.
+- Stopped syncing the replacement bank view by calling Blizzard's bank tab setter and removed direct bank-deposit `UseContainerItem` calls, avoiding a retail bankType taint path that can break native bag item use.
 - Updated current-character keystone refreshes to store the local roster keystone snapshot directly instead of depending on receiving a guild echo.
 
 ### Notes
-- This hotfix focuses on alt correctness: if a character just unlocked a dungeon portal, pressing Sync now forces the portal buttons and roster key-cast targets to re-evaluate that character's spellbook.
+- This minor release focuses on alt-correct portal availability and safer bag item interactions after the retail protected-action changes around container item use.
 
 ## 4.5.0 - 2026-04-23
 

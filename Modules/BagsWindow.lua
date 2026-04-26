@@ -24,6 +24,7 @@ local HEADER_ACTION_BUTTON_HEIGHT = 22
 local BAG_SLOTS_BUTTON_WIDTH = 52
 local CLEANUP_BUTTON_WIDTH = 70
 local COMBINE_BUTTON_WIDTH = 76
+local BLIZZ_BAGS_BUTTON_WIDTH = 46
 local HEADER_ACTION_BUTTON_GAP = 6
 local TITLEBAR_SEARCH_WIDTH = 220
 local TITLEBAR_SEARCH_HEIGHT = 22
@@ -212,6 +213,8 @@ function BagsWindow:OnInitialize()
     self.itemInteraction = nil
     self.titleText = nil
     self.modeText = nil
+    self.blizzBagsButton = nil
+    self.blizzBagsButtonText = nil
     self.searchBox = nil
     self.searchClearButton = nil
     self.searchPlaceholder = nil
@@ -1188,6 +1191,7 @@ function BagsWindow:ApplyConfiguredFonts()
 
     applyConfiguredFontIfPresent(self.titleText, titleFontSize, "")
     applyConfiguredFontIfPresent(self.modeText, 12, "")
+    applyConfiguredFontIfPresent(self.blizzBagsButtonText, 11, "")
     applyConfiguredFontIfPresent(self.searchBox, 12, "")
     applyConfiguredFontIfPresent(self.searchPlaceholder, 12, "")
     applyConfiguredFontIfPresent(self.bagSlotsButtonText, 11, "")
@@ -1336,6 +1340,17 @@ function BagsWindow:ConfigureCleanupButtonTooltip(button)
     GameTooltip:SetText(L["BAGS_CLEAR_NEW_ITEMS"], 1, 1, 1)
     GameTooltip:AddLine(L["BAGS_CLEAR_NEW_ITEMS_HINT"], 0.85, 0.85, 0.85, true)
     GameTooltip:Show()
+end
+
+function BagsWindow:OpenBlizzardBags()
+    local BagsBridge = vesperTools:GetModule("BagsBridge", true)
+    if BagsBridge and type(BagsBridge.ShowBlizzardBags) == "function" then
+        BagsBridge:ShowBlizzardBags()
+    elseif type(OpenAllBags) == "function" then
+        OpenAllBags()
+    elseif type(ToggleAllBags) == "function" then
+        ToggleAllBags()
+    end
 end
 
 -- Guild lookup controls and results rendering.
@@ -2136,8 +2151,33 @@ function BagsWindow:CreateWindow()
     vesperTools:ApplyConfiguredFont(titleText, vesperTools:GetConfiguredFontSize("roster", 12, 8, 24) + 4, "")
     self.titleText = titleText
 
+    local blizzBagsButton = CreateFrame("Button", nil, titlebar, "BackdropTemplate")
+    blizzBagsButton:SetPoint("LEFT", titleText, "RIGHT", 10, 0)
+    blizzBagsButton:SetSize(BLIZZ_BAGS_BUTTON_WIDTH, HEADER_ACTION_BUTTON_HEIGHT)
+    blizzBagsButton:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    blizzBagsButton:SetBackdropColor(0.08, 0.08, 0.1, 0.92)
+    blizzBagsButton:SetBackdropBorderColor(1, 1, 1, 0.12)
+    blizzBagsButton:SetHighlightTexture("Interface\\Buttons\\WHITE8x8", "ADD")
+    blizzBagsButton:GetHighlightTexture():SetVertexColor(0.24, 0.46, 0.72, 0.2)
+    blizzBagsButton:SetPushedTexture("Interface\\Buttons\\WHITE8x8")
+    blizzBagsButton:GetPushedTexture():SetVertexColor(0.12, 0.2, 0.3, 0.36)
+    blizzBagsButton:SetScript("OnClick", function()
+        self:OpenBlizzardBags()
+    end)
+    self.blizzBagsButton = blizzBagsButton
+
+    local blizzBagsButtonText = blizzBagsButton:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    blizzBagsButtonText:SetPoint("CENTER", 0, 0)
+    blizzBagsButtonText:SetText("Blizz")
+    vesperTools:ApplyConfiguredFont(blizzBagsButtonText, 11, "")
+    self.blizzBagsButtonText = blizzBagsButtonText
+
     local modeText = titlebar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    modeText:SetPoint("LEFT", titleText, "RIGHT", 10, 0)
+    modeText:SetPoint("LEFT", blizzBagsButton, "RIGHT", 10, 0)
     vesperTools:ApplyConfiguredFont(modeText, 12, "")
     self.modeText = modeText
 
@@ -3583,13 +3623,6 @@ function BagsWindow:TryDepositItemIntoActiveBank(button)
         or (Enum and Enum.BankType and Enum.BankType.Character or nil)
     if bankType ~= nil and not self:IsItemAllowedInBankType(sourceBagID, sourceSlotID, bankType) then
         return false
-    end
-
-    if bankType ~= nil and type(C_Container.UseContainerItem) == "function" then
-        local ok = pcall(C_Container.UseContainerItem, sourceBagID, sourceSlotID, nil, bankType)
-        if ok then
-            return true
-        end
     end
 
     local targetBagIDs = bankStore:GetBankBagIDsForView(viewKey)

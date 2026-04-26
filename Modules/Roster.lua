@@ -727,7 +727,20 @@ function Roster:CreateWindow()
         end
     end)
 
-    local bankBtn = createHeaderActionButton(titlebar, bagsBtn, 56, L["ROSTER_BUTTON_BANK"], function(_, mouseButton)
+    local blizzBagsBtn = createHeaderActionButton(titlebar, bagsBtn, 46, "Blizz", function(_, mouseButton)
+        if mouseButton == "LeftButton" then
+            local BagsBridge = vesperTools:GetModule("BagsBridge", true)
+            if BagsBridge and type(BagsBridge.ShowBlizzardBags) == "function" then
+                BagsBridge:ShowBlizzardBags()
+            elseif type(OpenAllBags) == "function" then
+                OpenAllBags()
+            elseif type(ToggleAllBags) == "function" then
+                ToggleAllBags()
+            end
+        end
+    end)
+
+    local bankBtn = createHeaderActionButton(titlebar, blizzBagsBtn, 56, L["ROSTER_BUTTON_BANK"], function(_, mouseButton)
         if mouseButton == "LeftButton" then
             local BankWindow = vesperTools:GetModule("BankWindow", true)
             if BankWindow and type(BankWindow.Toggle) == "function" then

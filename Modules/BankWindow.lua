@@ -283,33 +283,9 @@ function BankWindow:ShowWindow(preferredViewKey)
 end
 
 function BankWindow:SyncBlizzardBankView(viewKey)
-    if viewKey ~= "character" and viewKey ~= "warband" then
-        return
-    end
-    if not BankFrame or type(BankFrame.SetTab) ~= "function" then
-        return
-    end
-
-    local store = self:GetStore()
-    if not store then
-        return
-    end
-
-    local isLive = false
-    local tabID = nil
-    if viewKey == "warband" then
-        isLive = type(store.IsWarbandBankLive) == "function" and store:IsWarbandBankLive() or false
-        tabID = BankFrame.accountBankTabID
-    else
-        isLive = type(store.IsCharacterBankLive) == "function" and store:IsCharacterBankLive() or false
-        tabID = BankFrame.characterBankTabID
-    end
-
-    if not isLive or tabID == nil then
-        return
-    end
-
-    pcall(BankFrame.SetTab, BankFrame, tabID)
+    -- Do not drive Blizzard's bank tabs from addon code. On current retail,
+    -- addon-originated bank tab changes can taint Blizzard's bankType path,
+    -- which then breaks protected container item use in the native bags.
 end
 
 function BankWindow:SelectDefaultViewForOpen(preferredViewKey)

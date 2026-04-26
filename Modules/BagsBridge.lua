@@ -60,6 +60,7 @@ function BagsBridge:OnInitialize()
     self.merchantSessionOpenedBags = false
     self.pendingMerchantBagOpenAt = nil
     self.merchantFrameHooked = false
+    self.blizzardBagBypassUntil = 0
 end
 
 function BagsBridge:OnEnable()
@@ -211,6 +212,45 @@ function BagsBridge:HideBlizzardBags()
     end
 end
 
+function BagsBridge:HideInactiveBlizzardBankPanel()
+    if not BankFrame or not BankFrame.BankPanel or self:IsAnyWritableBankLive() then
+        return
+    end
+
+    if BankFrame.BankPanel:IsShown() then
+        pcall(BankFrame.BankPanel.Hide, BankFrame.BankPanel)
+    end
+end
+
+function BagsBridge:IsBlizzardBagBypassActive()
+    local expiresAt = tonumber(self.blizzardBagBypassUntil) or 0
+    if expiresAt <= 0 then
+        return false
+    end
+
+    local now = GetTime and GetTime() or 0
+    return now <= expiresAt
+end
+
+function BagsBridge:ShowBlizzardBags()
+    self.blizzardBagBypassUntil = (GetTime and GetTime() or 0) + 0.5
+    self.pendingBagAction = nil
+    self:HideInactiveBlizzardBankPanel()
+
+    local BagsWindow = vesperTools:GetModule("BagsWindow", true)
+    if BagsWindow and BagsWindow.frame and BagsWindow.frame:IsShown() then
+        BagsWindow.frame:Hide()
+    end
+
+    if type(OpenAllBags) == "function" then
+        OpenAllBags()
+    elseif type(ToggleAllBags) == "function" then
+        ToggleAllBags()
+    elseif type(OpenBackpack) == "function" then
+        OpenBackpack()
+    end
+end
+
 -- Remember whether the currently visible bags were opened by the merchant flow itself.
 function BagsBridge:TrackMerchantOwnedBagOpen(source, wasShown, BagsWindow)
     local isShown = BagsWindow and BagsWindow.frame and BagsWindow.frame:IsShown() and true or false
@@ -287,6 +327,10 @@ function BagsBridge:QueueReplacementAction(action)
             self.pendingBagAction = nil
             return
         end
+        if self:IsBlizzardBagBypassActive() then
+            self.pendingBagAction = nil
+            return
+        end
 
         local pendingAction = self.pendingBagAction
         self.pendingBagAction = nil
@@ -302,6 +346,9 @@ end
 -- Translate native Blizzard bag calls into replacement window actions.
 function BagsBridge:HandleBlizzardBagHook(action, bagID)
     if not self:IsBackpackReplacementEnabled() then
+        return
+    end
+    if self:IsBlizzardBagBypassActive() then
         return
     end
 
@@ -635,6 +682,7 @@ function BagsBridge:HandleBankSessionClosed()
     self.activeBankInteractionType = nil
     self:HideBankReplacementWindow()
     self:HideBagsOpenedForBankSession()
+    self:HideInactiveBlizzardBankPanel()
 end
 
 -- Mark the merchant session active and capture whether it opened bags itself.

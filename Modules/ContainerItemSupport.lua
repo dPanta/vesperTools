@@ -1,6 +1,7 @@
 local vesperTools = vesperTools or LibStub("AceAddon-3.0"):GetAddon("vesperTools")
 local L = vesperTools.L
 local ITEM_CLASS = Enum and Enum.ItemClass or {}
+local ENABLE_NATIVE_CONTAINER_OVERLAYS = true
 
 local function buildFallbackItemName(itemID)
     return string.format(L["ITEM_FALLBACK_FMT"], tostring(itemID))
@@ -124,19 +125,9 @@ local function defaultPickupItem(_, button)
 end
 
 local function defaultUseItem(_, button)
-    local bagID = button and (button.actionBagID or button.bagID) or nil
-    local slotID = button and (button.actionSlotID or button.slotID) or nil
-
-    if C_Container and C_Container.UseContainerItem and bagID and slotID then
-        C_Container.UseContainerItem(bagID, slotID)
-        return true
-    end
-
-    if UseContainerItem and bagID and slotID then
-        UseContainerItem(bagID, slotID)
-        return true
-    end
-
+    -- UseContainerItem is protected on current retail clients. Calling it from
+    -- addon Lua taints item clicks, so item use is handled by Blizzard's
+    -- native item button path or the secure fallback on live item buttons.
     return false
 end
 
@@ -157,6 +148,30 @@ local function itemHasUseAction(itemRef)
     end
 
     return spellName ~= nil
+end
+
+local function clearSecureItemUse(secureButton, button)
+    if secureButton and type(secureButton.SetAttribute) == "function" then
+        secureButton:SetAttribute("type", nil)
+        secureButton:SetAttribute("item", nil)
+        secureButton:SetAttribute("bag", nil)
+        secureButton:SetAttribute("slot", nil)
+        secureButton:SetAttribute("type2", nil)
+        secureButton:SetAttribute("item2", nil)
+        secureButton:SetAttribute("bag2", nil)
+        secureButton:SetAttribute("slot2", nil)
+        secureButton:SetAttribute("macrotext2", nil)
+        secureButton.vgSecureUseBagID = nil
+        secureButton.vgSecureUseSlotID = nil
+        secureButton:EnableMouse(false)
+        secureButton:Hide()
+    end
+
+    if button then
+        button.vgSecureUseConfigured = false
+        button.vgSecureUseBagID = nil
+        button.vgSecureUseSlotID = nil
+    end
 end
 
 function vesperTools:CreateContainerItemButton(host, parent, options)
@@ -226,16 +241,42 @@ function vesperTools:CreateContainerItemButton(host, parent, options)
     itemLevel:Hide()
     button.itemLevel = itemLevel
 
+    local secureUseButton = CreateFrame("Button", nil, button, "SecureActionButtonTemplate")
+    secureUseButton:SetAllPoints(button)
+    secureUseButton:SetFrameLevel(button:GetFrameLevel() + 10)
+    secureUseButton:RegisterForClicks("RightButtonUp", "RightButtonDown")
+    secureUseButton:SetAttribute("useOnKeyDown", false)
+    secureUseButton:SetAttribute("pressAndHoldAction", false)
+    secureUseButton:EnableMouse(false)
+    if type(secureUseButton.SetPassThroughButtons) == "function" then
+        if securecallfunction then
+            securecallfunction(secureUseButton.SetPassThroughButtons, secureUseButton, "LeftButton")
+        else
+            secureUseButton:SetPassThroughButtons("LeftButton")
+        end
+    end
+    secureUseButton:Hide()
+    button.secureUseButton = secureUseButton
+
     if options and type(options.onEnter) == "function" then
         button:SetScript("OnEnter", function(selfButton)
             options.onEnter(host, selfButton)
+        end)
+        secureUseButton:SetScript("OnEnter", function(selfButton)
+            options.onEnter(host, selfButton.ownerItemButton or button)
         end)
     end
     button:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
+    secureUseButton:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
     if options and type(options.onClick) == "function" then
         button:SetScript("OnClick", function(selfButton, mouseButton)
+            if mouseButton == "RightButton" and selfButton.vgSecureUseConfigured then
+                return
+            end
             options.onClick(host, selfButton, mouseButton)
         end)
     end
@@ -319,6 +360,59 @@ function vesperTools:CreateContainerItemController(host, config)
         end
 
         return itemHasUseAction(button.hyperlink or button.itemID)
+    end
+
+    function controller:ConfigureSecureItemUse(button)
+        local secureButton = button and button.secureUseButton or nil
+        if not secureButton or type(secureButton.SetAttribute) ~= "function" then
+            return
+        end
+
+        local hasNativeOverlay = self:ShouldUseNativeOverlay(button)
+        local bagID, slotID = self:GetButtonBagSlot(button, true)
+        local canUse = self:IsButtonInteractive(button)
+            and bagID
+            and slotID
+            and not hasNativeOverlay
+            and (not button.isCombined or self:CanUseCombinedButton(button))
+
+        if type(InCombatLockdown) == "function" and InCombatLockdown() then
+            if host.pendingSecureItemRefresh ~= nil then
+                host.pendingSecureItemRefresh = true
+            end
+            return
+        end
+
+        secureButton.ownerItemButton = button
+        secureButton:SetFrameLevel((button:GetFrameLevel() or 0) + 10)
+
+        if hasNativeOverlay then
+            clearSecureItemUse(secureButton, button)
+            return
+        end
+
+        if canUse then
+            local itemLocation = string.format("%d %d", bagID, slotID)
+            secureButton:SetAttribute("type", "item")
+            secureButton:SetAttribute("item", itemLocation)
+            secureButton:SetAttribute("bag", bagID)
+            secureButton:SetAttribute("slot", slotID)
+            secureButton:SetAttribute("type2", "item")
+            secureButton:SetAttribute("item2", itemLocation)
+            secureButton:SetAttribute("bag2", bagID)
+            secureButton:SetAttribute("slot2", slotID)
+            secureButton:SetAttribute("macrotext2", nil)
+            secureButton.vgSecureUseBagID = bagID
+            secureButton.vgSecureUseSlotID = slotID
+            secureButton:EnableMouse(true)
+            secureButton:Show()
+            button.vgSecureUseConfigured = true
+            button.vgSecureUseBagID = bagID
+            button.vgSecureUseSlotID = slotID
+            return
+        end
+
+        clearSecureItemUse(secureButton, button)
     end
 
     function controller:GetButtonBagSlot(button, allowCombinedUse)
@@ -423,7 +517,14 @@ function vesperTools:CreateContainerItemController(host, config)
             return
         end
 
-        if mouseButton == "RightButton" and self:UseItem(button) then
+        if mouseButton == "RightButton" and button and button.vgSecureUseConfigured then
+            return
+        end
+
+        if mouseButton == "RightButton" then
+            if type(self.config.useItem) == "function" then
+                self:UseItem(button)
+            end
             return
         end
 
@@ -459,10 +560,14 @@ function vesperTools:CreateContainerItemController(host, config)
             return { "LeftButton" }
         end
 
-        return nil
+        return { "LeftButton" }
     end
 
     function controller:ShouldUseNativeOverlay(button)
+        if not ENABLE_NATIVE_CONTAINER_OVERLAYS then
+            return false
+        end
+
         if not ContainerFrameItemButtonMixin then
             return false
         end
@@ -557,6 +662,19 @@ function vesperTools:CreateContainerItemController(host, config)
             return
         end
 
+        if not shouldUseNativeOverlay then
+            if type(InCombatLockdown) == "function" and InCombatLockdown() then
+                if host.pendingSecureItemRefresh ~= nil then
+                    host.pendingSecureItemRefresh = true
+                end
+                return
+            end
+
+            overlay:EnableMouse(false)
+            overlay:Hide()
+            return
+        end
+
         overlay:EnableMouse(self:GetOverlayMouseEnabled(button))
         if not self:ConfigureNativeContainerOverlayInput(overlay, button) then
             return
@@ -564,6 +682,9 @@ function vesperTools:CreateContainerItemController(host, config)
 
         if shouldUseNativeOverlay then
             local overlayBagID, overlaySlotID = self:GetNativeOverlayBagSlot(button)
+            if overlayBagID ~= nil and type(button.SetID) == "function" then
+                button:SetID(overlayBagID)
+            end
             local currentBagID = overlay.GetBagID and overlay:GetBagID() or nil
             local needsRefresh = not overlay:IsShown()
                 or overlay:GetID() ~= overlaySlotID
@@ -574,7 +695,10 @@ function vesperTools:CreateContainerItemController(host, config)
                     host.pendingSecureItemRefresh = true
                     return
                 end
-                overlay:Initialize(overlayBagID, overlaySlotID)
+                overlay:SetID(overlaySlotID)
+                if type(overlay.UpdateExtended) == "function" then
+                    overlay:UpdateExtended()
+                end
             end
 
             overlay:SetAllPoints(button)
@@ -637,6 +761,7 @@ function vesperTools:CreateContainerItemController(host, config)
             button.glow:Hide()
         end
         button:SetBackdropColor(0.08, 0.08, 0.08, 1)
+        self:ConfigureSecureItemUse(button)
         button:SetEnabled(true)
         self:UpdateNativeContainerOverlay(button)
 
