@@ -146,9 +146,16 @@ function BankWindow:GetItemInteraction()
 end
 
 function BankWindow:OnBankDataChanged()
-    if self.frame and self.frame:IsShown() then
-        self:RefreshWindow()
+    if self.dataRefreshQueued or not self.frame or not self.frame:IsShown() then
+        return
     end
+    self.dataRefreshQueued = true
+    C_Timer.After(0, function()
+        self.dataRefreshQueued = false
+        if self:IsEnabled() and self.frame and self.frame:IsShown() then
+            self:RefreshWindow()
+        end
+    end)
 end
 
 function BankWindow:OnConfigChanged()

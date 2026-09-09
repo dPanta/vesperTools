@@ -286,13 +286,10 @@ function BagsWindow:GetItemInteraction()
                 return false
             end
 
-            local bagID = button and (button.bagID or button.actionBagID) or nil
-            local slotID = button and (button.slotID or button.actionSlotID) or nil
+            local bagID, slotID = window:GetItemInteraction():GetNativeOverlayBagSlot(button)
             return button and button.isInteractive and bagID and slotID and true or false
         end,
-        shouldUseSecureItemButton = function(window)
-            return not window:HasAnyWritableBankLive()
-        end,
+        shouldUseSecureItemButton = false,
         afterConfigureButton = function(window, button, record, context)
             if window:ShouldShowNewItemGlow(record, context and context.characterKey or nil) then
                 button.newGlow:SetAtlas(getNewItemGlowAtlas(record.quality), false)
@@ -319,9 +316,17 @@ function BagsWindow:GetGuildLookup()
 end
 
 function BagsWindow:OnBagDataChanged()
-    if self.frame and self.frame:IsShown() then
-        self:RefreshWindow()
+    if self.dataRefreshQueued or not self.frame or not self.frame:IsShown() then
+        return
     end
+    -- A single scan broadcasts snapshot, character and index updates together.
+    self.dataRefreshQueued = true
+    C_Timer.After(0, function()
+        self.dataRefreshQueued = false
+        if self:IsEnabled() and self.frame and self.frame:IsShown() then
+            self:RefreshWindow()
+        end
+    end)
 end
 
 function BagsWindow:OnConfigChanged()
@@ -335,9 +340,7 @@ function BagsWindow:OnGuildLookupUpdated()
 end
 
 function BagsWindow:OnCurrencyDataChanged()
-    if self.frame and self.frame:IsShown() then
-        self:RefreshWindow()
-    end
+    self:OnBagDataChanged()
 end
 
 function BagsWindow:PLAYER_REGEN_ENABLED()
@@ -3279,6 +3282,7 @@ function BagsWindow:AcquireItemButton()
     local button = vesperTools:CreateContainerItemButton(self, self.content, {
         defaultSize = DEFAULT_BUTTON_SIZE,
         includeNewItemGlow = true,
+        createSecureUseButton = false,
         onEnter = function(window, selfButton)
             window:HandleItemEnter(selfButton)
         end,

@@ -5,7 +5,7 @@ local L = vesperTools.L
 -- BagsStore owns the live carried-bag snapshot for the current character and the
 -- account-wide aggregate index used by the replacement inventory views.
 local ITEM_CLASS = Enum and Enum.ItemClass or {}
-local CURRENT_BAGS_SCHEMA_VERSION = 6
+local CURRENT_BAGS_SCHEMA_VERSION = 7
 local NEW_CATEGORY_KEY = "new"
 local NEW_ITEM_TIMEOUT_SECONDS = 3600
 local BAG_CATEGORY_DEFS = {
@@ -14,6 +14,7 @@ local BAG_CATEGORY_DEFS = {
     { key = "season", labelKey = "BAGS_CATEGORY_SEASON", order = 2 },
     { key = "junk", labelKey = "BAGS_CATEGORY_JUNK", order = 3 },
     { key = "reagent", labelKey = "BAGS_CATEGORY_REAGENT", order = 4 },
+    { key = "enhancements", labelKey = "BAGS_CATEGORY_ENHANCEMENTS", order = 4.5 },
     { key = "consumable", labelKey = "BAGS_CATEGORY_CONSUMABLE", order = 5 },
     { key = "equipment", labelKey = "BAGS_CATEGORY_EQUIPMENT", order = 6 },
     { key = "recipe", labelKey = "BAGS_CATEGORY_RECIPE", order = 7 },
@@ -49,6 +50,7 @@ local LEGACY_SEASONAL_EQUIPMENT_TRACK_MARKERS = {
     "track: myth",
 }
 local SEASON_SPECIAL_ITEM_IDS = {
+    [274476] = true, -- Spark of Tides (Midnight Season 2)
     [233071] = true, -- Delver's Bounty
     [235628] = true, -- Delver's Bounty with upgrade data
     [264414] = true, -- Midnight Delver's Flare Gun
@@ -57,9 +59,6 @@ local SEASON_SPECIAL_ITEM_IDS = {
     [273000] = true, -- Corrosive Soul
     [265714] = true, -- Trovehunter's Bounty
     [274374] = true, -- Trovehunter's Bounty (12.1 variant)
-}
-local SEASON_NAME_MARKERS = {
-    "mythic keystone",
 }
 local SEASON_SPARK_NAME_PREFIXES = {
     "spark of ",
@@ -405,6 +404,7 @@ function BagsStore:OnInitialize()
     -- Ingesting C_NewItems flags before the login-noise clear has run would
     -- stamp the whole inventory as new; hold ingestion until then.
     self.suppressNewItemIngestion = true
+    self.pendingItemBagIDs = {}
 end
 
 function BagsStore:OnEnable()
@@ -414,6 +414,7 @@ function BagsStore:OnEnable()
     self:RegisterEvent("BAG_CONTAINER_UPDATE")
     self:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
     self:RegisterEvent("PLAYER_MONEY")
+    self:RegisterEvent("ITEM_DATA_LOAD_RESULT")
 end
 
 function BagsStore:GetDB()
@@ -456,6 +457,10 @@ function BagsStore:GetTrackedBagIDs()
     return TRACKED_BAG_IDS
 end
 
+function BagsStore:GetCategoryKeys()
+    return CATEGORY_ORDER
+end
+
 function BagsStore:IsTrackedBagID(bagID)
     return TRACKED_BAG_SET[bagID] and true or false
 end
@@ -490,6 +495,7 @@ function BagsStore:UpdateCurrentScaledLegacyEquipmentFlag(meta)
         and currentExpansionID ~= nil
         and expansionID ~= currentExpansionID
         and (classID == ITEM_CLASS.Weapon or classID == ITEM_CLASS.Armor)
+        and requiredLevel == nil
         and textContainsAnyMarker(searchText, LEGACY_SEASONAL_EQUIPMENT_TRACK_MARKERS)
     local isCurrentLevelLegacyEquipment = expansionID ~= nil
         and currentExpansionID ~= nil
@@ -848,7 +854,18 @@ function BagsStore:BuildItemMeta(itemID, hyperlink, info, bagID, slotID)
         return nil
     end
 
-    local meta = global.itemMeta[itemID] or {}
+    -- Metadata such as required level and tooltip text belongs to the full link.
+    -- Do not let a different bonus/scaling variant inherit it from the same ID.
+    local previous = global.itemMeta[itemID] or {}
+    local meta = {}
+    for key, value in pairs(previous) do
+        meta[key] = value
+    end
+    if previous.hyperlink ~= hyperlink then
+        meta.requiredLevel = nil
+        meta.itemDescription = nil
+        meta.searchText = nil
+    end
     global.itemMeta[itemID] = meta
 
     local _, _, _, equipLoc, iconFileID, classID, subClassID = C_Item.GetItemInfoInstant(itemID)
@@ -858,7 +875,7 @@ function BagsStore:BuildItemMeta(itemID, hyperlink, info, bagID, slotID)
     meta.iconFileID = info and info.iconFileID or iconFileID or meta.iconFileID
 
     local itemInfoRef = hyperlink or itemID
-    local _, _, quality, _, itemMinLevel, _, _, _, _, _, _, resolvedClassID, resolvedSubClassID, _, expansionID, _, isCraftingReagent = getItemInfoRecord(itemInfoRef)
+    local resolvedName, _, quality, _, itemMinLevel, _, _, _, _, _, _, resolvedClassID, resolvedSubClassID, _, expansionID, _, isCraftingReagent = getItemInfoRecord(itemInfoRef)
     if resolvedClassID ~= nil then
         meta.classID = resolvedClassID
     end
@@ -881,14 +898,10 @@ function BagsStore:BuildItemMeta(itemID, hyperlink, info, bagID, slotID)
         meta.quality = info.quality
     end
 
-    local itemName
-    if C_Item and C_Item.GetItemNameByID then
-        itemName = C_Item.GetItemNameByID(itemID)
+    local itemName = normalizeName(resolvedName or (info and info.itemName))
+    if not resolvedName then
+        self:RequestMissingItemData(itemID, bagID)
     end
-    if not itemName or itemName == "" then
-        itemName = GetItemInfo(itemID)
-    end
-    itemName = normalizeName(itemName)
     if itemName then
         meta.itemName = itemName
     elseif not meta.itemName then
@@ -916,7 +929,7 @@ function BagsStore:BuildItemMeta(itemID, hyperlink, info, bagID, slotID)
         meta.itemDescription or "",
         vesperTools:GetEquipLocSearchTerms(meta.equipLoc) or "",
     }, " ")) or meta.searchText
-    meta.requiredLevel = extractRequiredLevel(meta.searchText) or meta.requiredLevel
+    meta.requiredLevel = meta.requiredLevel or extractRequiredLevel(meta.searchText)
     self:UpdateCurrentScaledLegacyEquipmentFlag(meta)
 
     meta.lastResolved = time()
@@ -924,6 +937,22 @@ function BagsStore:BuildItemMeta(itemID, hyperlink, info, bagID, slotID)
 end
 
 function BagsStore:ResolveCategoryKey(meta, info, questInfo)
+    local classID = meta and meta.classID
+    local subClassID = meta and meta.subClassID
+    local consumableSubclass = Enum and Enum.ItemConsumableSubclass or {}
+    local reagentSubclass = Enum and Enum.ItemReagentSubclass or {}
+    -- Include old enchants and temporary weapon enhancements, even when they
+    -- also carry the crafting-reagent flag. Enchanting materials remain reagents.
+    if classID == ITEM_CLASS.Gem or classID == ITEM_CLASS.ItemEnhancement
+        or (classID == ITEM_CLASS.Consumable and subClassID == consumableSubclass.Itemenhancement) then
+        return "enhancements"
+    end
+
+    -- Keystone expansion metadata can refer to an older dungeon in the rotation.
+    if classID == ITEM_CLASS.Reagent and subClassID == reagentSubclass.Keystone then
+        return "season"
+    end
+
     local expansionID = meta and normalizeExpansionID(meta.expansionID) or nil
     local currentExpansionID = getCurrentExpansionID()
     if expansionID ~= nil and currentExpansionID ~= nil and expansionID ~= currentExpansionID then
@@ -937,25 +966,20 @@ function BagsStore:ResolveCategoryKey(meta, info, questInfo)
         return "quest"
     end
 
-    local searchText = (meta and meta.searchText)
-        or (info and info.searchText)
-        or vesperTools:NormalizeSearchText((info and info.itemName) or "")
     if isKnownSeasonItemID(info and info.itemID)
-        or textContainsAnyMarker(searchText, SEASON_NAME_MARKERS)
         or isSeasonSparkItem(meta, info)
     then
         return "season"
     end
 
-    if info and tonumber(info.quality) == 0 then
+    if tonumber((info and info.quality) or (meta and meta.quality)) == 0 then
         return "junk"
     end
 
-    if info and info.isCraftingReagent then
+    if (info and info.isCraftingReagent) or (meta and meta.isCraftingReagent) then
         return "reagent"
     end
 
-    local classID = meta and meta.classID
     if classID == ITEM_CLASS.Consumable then
         return "consumable"
     end
@@ -968,7 +992,7 @@ function BagsStore:ResolveCategoryKey(meta, info, questInfo)
         return "recipe"
     end
 
-    if classID == ITEM_CLASS.Tradegoods or classID == ITEM_CLASS.Gem or classID == ITEM_CLASS.Reagent then
+    if classID == ITEM_CLASS.Tradegoods or classID == ITEM_CLASS.Reagent then
         return "tradegoods"
     end
 
@@ -1024,6 +1048,9 @@ function BagsStore:BuildSlotRecord(bagID, slotID)
         stackCount = tonumber(info.stackCount) or 1,
         quality = quality,
         expansionID = meta and meta.expansionID or nil,
+        requiredLevel = meta and meta.requiredLevel or nil,
+        classID = meta and meta.classID or nil,
+        subClassID = meta and meta.subClassID or nil,
         isLocked = info.isLocked and true or false,
         isQuestItem = questInfo.isQuestItem and true or false,
         isCraftingReagent = (info.isCraftingReagent or (meta and meta.isCraftingReagent)) and true or false,
@@ -1105,6 +1132,9 @@ function BagsStore:BagSnapshotsEqual(a, b)
                 or oldRecord.iconFileID ~= newRecord.iconFileID
                 or oldRecord.quality ~= newRecord.quality
                 or oldRecord.expansionID ~= newRecord.expansionID
+                or oldRecord.requiredLevel ~= newRecord.requiredLevel
+                or oldRecord.classID ~= newRecord.classID
+                or oldRecord.subClassID ~= newRecord.subClassID
                 or oldRecord.isLocked ~= newRecord.isLocked
                 or oldRecord.isQuestItem ~= newRecord.isQuestItem
                 or oldRecord.isCraftingReagent ~= newRecord.isCraftingReagent
@@ -1218,6 +1248,27 @@ function BagsStore:BuildAccountIndexFromCharacters(charactersByGUID)
     return rebuilt
 end
 
+function BagsStore:GetRecordCategoryMeta(global, record)
+    local meta = {}
+    for key, value in pairs(global.itemMeta[record.itemID] or {}) do
+        meta[key] = value
+    end
+    if record.hyperlink ~= meta.hyperlink then
+        meta.requiredLevel = nil
+        meta.itemDescription = nil
+        meta.searchText = nil
+    end
+    for key, value in pairs(record) do
+        meta[key] = value
+    end
+    -- Class data is available instantly even for offline snapshots with no meta.
+    if not meta.classID and C_Item and C_Item.GetItemInfoInstant then
+        local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(record.itemID)
+        meta.classID, meta.subClassID = classID, subClassID
+    end
+    return meta
+end
+
 function BagsStore:RecategorizeCarriedSnapshot(global, carried)
     if type(global) ~= "table" or type(carried) ~= "table" or type(carried.bags) ~= "table" then
         return false
@@ -1231,7 +1282,7 @@ function BagsStore:RecategorizeCarriedSnapshot(global, carried)
             for slotID = 1, tonumber(bag.size) or 0 do
                 local record = bag.slots[slotID]
                 if type(record) == "table" and record.itemID then
-                    local meta = global.itemMeta and global.itemMeta[record.itemID] or nil
+                    local meta = self:GetRecordCategoryMeta(global, record)
                     local nextCategoryKey = record.categoryKey
 
                     if meta then
@@ -1291,14 +1342,9 @@ function BagsStore:RunGlobalMigrations(global, startingVersion)
         return false
     end
 
-    if schemaVersion < 5 then
+    if schemaVersion < CURRENT_BAGS_SCHEMA_VERSION then
         self:RefreshCurrentScaledLegacyEquipmentData(global)
-        schemaVersion = 5
-    end
-
-    if schemaVersion < 6 then
-        self:RefreshCurrentScaledLegacyEquipmentData(global)
-        schemaVersion = 6
+        schemaVersion = CURRENT_BAGS_SCHEMA_VERSION
     end
 
     global.schemaVersion = schemaVersion
@@ -1352,6 +1398,54 @@ function BagsStore:PLAYER_MONEY()
     self:CommitCurrentCurrencySnapshot()
 end
 
+-- One request per missing item, with all interested bag IDs retained. The load
+-- event need not be followed by BAG_UPDATE_DELAYED, so schedule our own commit.
+function BagsStore:RequestMissingItemData(itemID, bagID)
+    if bagID == nil or not C_Item or not C_Item.RequestLoadItemDataByID then
+        return
+    end
+    local bags = self.pendingItemBagIDs[itemID]
+    if bags then
+        bags[bagID] = true
+        return
+    end
+    self.pendingItemBagIDs[itemID] = { [bagID] = true }
+    C_Item.RequestLoadItemDataByID(itemID)
+end
+
+function BagsStore:QueuePendingBagCommit()
+    if self.bagCommitQueued then
+        return
+    end
+    self.bagCommitQueued = true
+    C_Timer.After(0, function()
+        self.bagCommitQueued = false
+        if self:IsEnabled() then
+            self:BAG_UPDATE_DELAYED()
+        end
+    end)
+end
+
+function BagsStore:ITEM_DATA_LOAD_RESULT(_, itemID, success)
+    local bags = self.pendingItemBagIDs[itemID]
+    self.pendingItemBagIDs[itemID] = nil
+    if not bags or not success then
+        return
+    end
+
+    local global = self:GetGlobalDB()
+    local meta = global and global.itemMeta[itemID]
+    if meta then
+        meta.itemDescription = nil
+        meta.searchText = nil
+    end
+    for bagID in pairs(bags) do
+        self:BAG_UPDATE(nil, bagID)
+    end
+    self:QueuePendingBagCommit()
+    vesperTools:SendMessage("VESPERTOOLS_CONTAINER_ITEM_DATA_READY", bags)
+end
+
 function BagsStore:BAG_UPDATE(_, bagID)
     if not self:IsTrackedBagID(bagID) then
         return
@@ -1364,6 +1458,7 @@ end
 function BagsStore:BAG_CONTAINER_UPDATE()
     self.pendingBagUpdate = true
     self:MarkFullCarryRescan("container")
+    self:QueuePendingBagCommit()
 end
 
 function BagsStore:BAG_UPDATE_DELAYED()
@@ -1463,6 +1558,11 @@ function BagsStore:CommitPendingBagWork()
         return true
     end
 
+    local oldAggregate = {
+        itemTotals = character.carried.itemTotals,
+        categoryTotals = character.carried.categoryTotals,
+        categoryItems = character.carried.categoryItems,
+    }
     local aggregate = self:BuildAggregatesFromBags(character.carried.bags)
     character.carried.itemTotals = aggregate.itemTotals
     character.carried.categoryTotals = aggregate.categoryTotals
@@ -1471,7 +1571,9 @@ function BagsStore:CommitPendingBagWork()
     character.lastSeen = time()
     self.pendingRescanReason = nil
     self:UpdateNewItemTracking(character)
-    self:RebuildAccountIndex()
+    if not self:ApplyCharacterAggregateReplacement(characterKey, oldAggregate, aggregate) then
+        self:RebuildAccountIndex()
+    end
     self:BroadcastBagChange(characterKey)
     return true
 end

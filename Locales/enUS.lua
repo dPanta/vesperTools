@@ -39,6 +39,7 @@ local defaults = {
     BAGS_CATEGORY_CONSUMABLE = "Consumables",
     BAGS_CATEGORY_CONTAINER = "Containers",
     BAGS_CATEGORY_EQUIPMENT = "Equipment",
+    BAGS_CATEGORY_ENHANCEMENTS = "Enhancements",
     BAGS_CATEGORY_JUNK = "Junk",
     BAGS_CATEGORY_MISC = "Miscellaneous",
     BAGS_CATEGORY_NEW = "New Items",

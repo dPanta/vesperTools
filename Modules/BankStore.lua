@@ -4,28 +4,7 @@ local L = vesperTools.L
 
 -- BankStore mirrors BagsStore for live bank data, but splits snapshots into
 -- character-bank and warband-bank views with their own dirty tracking.
-local ITEM_CLASS = Enum and Enum.ItemClass or {}
-local BAG_CATEGORY_DEFS = {
-    { key = "quest", labelKey = "BAGS_CATEGORY_QUEST", order = 1 },
-    { key = "junk", labelKey = "BAGS_CATEGORY_JUNK", order = 2 },
-    { key = "reagent", labelKey = "BAGS_CATEGORY_REAGENT", order = 3 },
-    { key = "consumable", labelKey = "BAGS_CATEGORY_CONSUMABLE", order = 4 },
-    { key = "equipment", labelKey = "BAGS_CATEGORY_EQUIPMENT", order = 5 },
-    { key = "recipe", labelKey = "BAGS_CATEGORY_RECIPE", order = 6 },
-    { key = "tradegoods", labelKey = "BAGS_CATEGORY_TRADE_GOODS", order = 7 },
-    { key = "container", labelKey = "BAGS_CATEGORY_CONTAINER", order = 8 },
-    { key = "misc", labelKey = "BAGS_CATEGORY_MISC", order = 9 },
-}
-
-local CATEGORY_ORDER = {}
-local CATEGORY_LABEL_KEY_BY_ID = {}
-local CATEGORY_PRIORITY_BY_ID = {}
-for i = 1, #BAG_CATEGORY_DEFS do
-    local def = BAG_CATEGORY_DEFS[i]
-    CATEGORY_ORDER[i] = def.key
-    CATEGORY_LABEL_KEY_BY_ID[def.key] = def.labelKey
-    CATEGORY_PRIORITY_BY_ID[def.key] = def.order
-end
+local BagsStore = vesperTools:GetModule("BagsStore")
 
 local CHARACTER_BANK_BAG_IDS = {}
 local ACCOUNT_BANK_BAG_IDS = {}
@@ -120,34 +99,6 @@ local function getEmptySlotCountForBag(bag)
     return math.max(0, size - used)
 end
 
-local function collectTooltipTextParts(tooltipData)
-    if type(tooltipData) ~= "table" or type(tooltipData.lines) ~= "table" then
-        return nil
-    end
-
-    local parts = {}
-    for i = 1, #tooltipData.lines do
-        local line = tooltipData.lines[i]
-        if type(line) == "table" then
-            local leftText = normalizeName(line.leftText or line.text)
-            local rightText = normalizeName(line.rightText)
-
-            if leftText then
-                parts[#parts + 1] = leftText
-            end
-            if rightText then
-                parts[#parts + 1] = rightText
-            end
-        end
-    end
-
-    if #parts == 0 then
-        return nil
-    end
-
-    return parts
-end
-
 local function getBagName(bagID)
     if C_Container and C_Container.GetBagName then
         local name = C_Container.GetBagName(bagID)
@@ -210,6 +161,8 @@ function BankStore:OnEnable()
     self:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
     self:RegisterEvent("PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED")
     self:RegisterEvent("BANK_TAB_SETTINGS_UPDATED")
+    self:RegisterEvent("BANK_TABS_CHANGED", "BANK_TAB_SETTINGS_UPDATED")
+    self:RegisterMessage("VESPERTOOLS_CONTAINER_ITEM_DATA_READY", "OnItemDataReady")
 end
 
 function BankStore:GetDB()
@@ -234,7 +187,37 @@ function BankStore:GetGlobalDB()
     global.bank.warband.categoryItems = global.bank.warband.categoryItems or {}
     global.bank.warband.lastSeen = tonumber(global.bank.warband.lastSeen) or 0
 
+    if (tonumber(global.bank.categoryVersion) or 0) < 1 then
+        for _, character in pairs(global.bank.charactersByGUID) do
+            self:RecategorizeBankView(global, character.bank, CHARACTER_BANK_BAG_IDS)
+        end
+        self:RecategorizeBankView(global, global.bank.warband, ACCOUNT_BANK_BAG_IDS)
+        global.bank.categoryVersion = 1
+    end
+
     return global
+end
+
+-- Migrate cached alts/warband views without claiming they were freshly scanned.
+function BankStore:RecategorizeBankView(global, view, bagIDs)
+    if type(view) ~= "table" or type(view.bags) ~= "table" then
+        return
+    end
+    for _, bagID in ipairs(bagIDs) do
+        local bag = view.bags[bagID]
+        if type(bag) == "table" and type(bag.slots) == "table" then
+            for _, record in pairs(bag.slots) do
+                if type(record) == "table" and record.itemID then
+                    local meta = BagsStore:GetRecordCategoryMeta(global, record)
+                    record.categoryKey = self:ResolveCategoryKey(meta, record, record)
+                end
+            end
+        end
+    end
+    local aggregate = self:BuildAggregatesFromBags(view.bags, bagIDs)
+    view.itemTotals = aggregate.itemTotals
+    view.categoryTotals = aggregate.categoryTotals
+    view.categoryItems = aggregate.categoryItems
 end
 
 function BankStore:GetBankRoot()
@@ -247,15 +230,11 @@ function BankStore:GetCurrentCharacterKey()
 end
 
 function BankStore:GetCategoryDisplayName(categoryKey)
-    local labelKey = CATEGORY_LABEL_KEY_BY_ID[categoryKey]
-    if labelKey then
-        return L[labelKey]
-    end
-    return L["BAGS_CATEGORY_MISC"]
+    return BagsStore:GetCategoryDisplayName(categoryKey)
 end
 
 function BankStore:GetCategoryOrder(categoryKey)
-    return CATEGORY_PRIORITY_BY_ID[categoryKey] or 999
+    return BagsStore:GetCategoryOrder(categoryKey)
 end
 
 function BankStore:IsTrackedBankBagID(bagID)
@@ -290,7 +269,7 @@ function BankStore:CanUseBankType(bankType)
         end
     end
 
-    return true
+    return false
 end
 
 -- Character bank is considered live only while the current interaction allows writing.
@@ -350,140 +329,13 @@ function BankStore:CreateOrUpdateCurrentCharacter()
     return characterKey, character
 end
 
-function BankStore:GetItemDescription(itemID, hyperlink, bagID, slotID, itemName)
-    local tooltipData
-    if C_TooltipInfo then
-        if bagID and slotID and C_TooltipInfo.GetBagItem then
-            tooltipData = C_TooltipInfo.GetBagItem(bagID, slotID)
-        elseif type(hyperlink) == "string" and hyperlink ~= "" and C_TooltipInfo.GetHyperlink then
-            tooltipData = C_TooltipInfo.GetHyperlink(hyperlink)
-        elseif itemID and C_TooltipInfo.GetItemByID then
-            tooltipData = C_TooltipInfo.GetItemByID(itemID)
-        end
-    end
-
-    local parts = collectTooltipTextParts(tooltipData)
-    if not parts then
-        return nil
-    end
-
-    local normalizedItemName = vesperTools:NormalizeSearchText(itemName)
-    local descriptionParts = {}
-    local skippedName = false
-
-    for i = 1, #parts do
-        local part = parts[i]
-        local normalizedPart = vesperTools:NormalizeSearchText(part)
-        if normalizedPart then
-            if not skippedName and normalizedItemName and normalizedPart == normalizedItemName then
-                skippedName = true
-            else
-                descriptionParts[#descriptionParts + 1] = part
-            end
-        end
-    end
-
-    if #descriptionParts == 0 then
-        return nil
-    end
-
-    return table.concat(descriptionParts, "\n")
-end
-
+-- Carried, character-bank and warband items share one metadata/category policy.
 function BankStore:BuildItemMeta(itemID, hyperlink, info, bagID, slotID)
-    local global = self:GetGlobalDB()
-    if not global or not itemID then
-        return nil
-    end
-
-    local meta = global.itemMeta[itemID] or {}
-    global.itemMeta[itemID] = meta
-
-    local _, _, _, equipLoc, iconFileID, classID, subClassID = C_Item.GetItemInfoInstant(itemID)
-    meta.classID = classID or meta.classID
-    meta.subClassID = subClassID or meta.subClassID
-    meta.equipLoc = equipLoc or meta.equipLoc
-    meta.iconFileID = info and info.iconFileID or iconFileID or meta.iconFileID
-
-    if info and info.quality ~= nil then
-        meta.quality = info.quality
-    end
-
-    local itemName
-    if C_Item and C_Item.GetItemNameByID then
-        itemName = C_Item.GetItemNameByID(itemID)
-    end
-    if not itemName or itemName == "" then
-        itemName = GetItemInfo(itemID)
-    end
-    itemName = normalizeName(itemName)
-    if itemName then
-        meta.itemName = itemName
-    elseif not meta.itemName then
-        meta.itemName = vesperTools:BuildFallbackItemName(itemID)
-    end
-
-    local shouldRefreshDescription = not meta.itemDescription
-    if not shouldRefreshDescription and type(hyperlink) == "string" and hyperlink ~= "" and meta.hyperlink ~= hyperlink then
-        shouldRefreshDescription = true
-    end
-
-    if shouldRefreshDescription then
-        local itemDescription = self:GetItemDescription(itemID, hyperlink, bagID, slotID, meta.itemName)
-        if itemDescription then
-            meta.itemDescription = itemDescription
-        end
-    end
-
-    if type(hyperlink) == "string" and hyperlink ~= "" then
-        meta.hyperlink = hyperlink
-    end
-
-    meta.searchText = vesperTools:NormalizeSearchText(table.concat({
-        meta.itemName or vesperTools:BuildFallbackItemName(itemID),
-        meta.itemDescription or "",
-        vesperTools:GetEquipLocSearchTerms(meta.equipLoc) or "",
-    }, " ")) or meta.searchText
-    meta.lastResolved = time()
-
-    return meta
+    return BagsStore:BuildItemMeta(itemID, hyperlink, info, bagID, slotID)
 end
 
 function BankStore:ResolveCategoryKey(meta, info, questInfo)
-    if questInfo and questInfo.isQuestItem then
-        return "quest"
-    end
-
-    if info and tonumber(info.quality) == 0 then
-        return "junk"
-    end
-
-    if info and info.isCraftingReagent then
-        return "reagent"
-    end
-
-    local classID = meta and meta.classID
-    if classID == ITEM_CLASS.Consumable then
-        return "consumable"
-    end
-
-    if classID == ITEM_CLASS.Weapon or classID == ITEM_CLASS.Armor then
-        return "equipment"
-    end
-
-    if classID == ITEM_CLASS.Recipe then
-        return "recipe"
-    end
-
-    if classID == ITEM_CLASS.Tradegoods or classID == ITEM_CLASS.Gem or classID == ITEM_CLASS.Reagent then
-        return "tradegoods"
-    end
-
-    if classID == ITEM_CLASS.Container then
-        return "container"
-    end
-
-    return "misc"
+    return BagsStore:ResolveCategoryKey(meta, info, questInfo)
 end
 
 function BankStore:BuildSlotRecord(bagID, slotID)
@@ -532,7 +384,11 @@ function BankStore:BuildSlotRecord(bagID, slotID)
         quality = quality,
         isLocked = info.isLocked and true or false,
         isQuestItem = questInfo.isQuestItem and true or false,
-        isCraftingReagent = info.isCraftingReagent and true or false,
+        isCraftingReagent = (info.isCraftingReagent or (meta and meta.isCraftingReagent)) and true or false,
+        expansionID = meta and meta.expansionID or nil,
+        requiredLevel = meta and meta.requiredLevel or nil,
+        classID = meta and meta.classID or nil,
+        subClassID = meta and meta.subClassID or nil,
         categoryKey = categoryKey,
         sortKey = string.lower(itemName or vesperTools:BuildFallbackItemName(itemID)),
         searchText = meta and meta.searchText or vesperTools:NormalizeSearchText(table.concat({
@@ -610,6 +466,10 @@ function BankStore:BagSnapshotsEqual(a, b)
                 or oldRecord.hyperlink ~= newRecord.hyperlink
                 or oldRecord.iconFileID ~= newRecord.iconFileID
                 or oldRecord.quality ~= newRecord.quality
+                or oldRecord.expansionID ~= newRecord.expansionID
+                or oldRecord.requiredLevel ~= newRecord.requiredLevel
+                or oldRecord.classID ~= newRecord.classID
+                or oldRecord.subClassID ~= newRecord.subClassID
                 or oldRecord.isLocked ~= newRecord.isLocked
                 or oldRecord.isQuestItem ~= newRecord.isQuestItem
                 or oldRecord.isCraftingReagent ~= newRecord.isCraftingReagent
@@ -721,6 +581,29 @@ function BankStore:BAG_UPDATE_DELAYED()
     self:CommitPendingBankWork()
 end
 
+function BankStore:QueuePendingBankCommit()
+    if self.bankCommitQueued then
+        return
+    end
+    self.bankCommitQueued = true
+    C_Timer.After(0, function()
+        self.bankCommitQueued = false
+        if self:IsEnabled() then
+            self:BAG_UPDATE_DELAYED()
+        end
+    end)
+end
+
+function BankStore:OnItemDataReady(_, bagIDs)
+    if not self.bankOpen then
+        return
+    end
+    for bagID in pairs(bagIDs) do
+        self:BAG_UPDATE(nil, bagID)
+    end
+    self:QueuePendingBankCommit()
+end
+
 function BankStore:BAG_CONTAINER_UPDATE()
     if not self.bankOpen then
         return
@@ -729,6 +612,7 @@ function BankStore:BAG_CONTAINER_UPDATE()
     self.pendingBankUpdate = true
     self:MarkFullCharacterRescan("container")
     self:MarkFullWarbandRescan("container")
+    self:QueuePendingBankCommit()
 end
 
 function BankStore:PLAYERBANKSLOTS_CHANGED()
@@ -738,6 +622,7 @@ function BankStore:PLAYERBANKSLOTS_CHANGED()
 
     self.pendingBankUpdate = true
     self:MarkFullCharacterRescan("slots")
+    self:QueuePendingBankCommit()
 end
 
 function BankStore:PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED()
@@ -747,6 +632,7 @@ function BankStore:PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED()
 
     self.pendingBankUpdate = true
     self:MarkFullWarbandRescan("account-slots")
+    self:QueuePendingBankCommit()
 end
 
 function BankStore:BANK_TAB_SETTINGS_UPDATED(_, bankType)
@@ -763,6 +649,7 @@ function BankStore:BANK_TAB_SETTINGS_UPDATED(_, bankType)
         self:MarkFullCharacterRescan("settings")
         self:MarkFullWarbandRescan("settings")
     end
+    self:QueuePendingBankCommit()
 end
 
 -- Flag a full character-bank rebuild when incremental updates are no longer safe.
@@ -885,7 +772,10 @@ function BankStore:CommitPendingBankWork()
         wipe(self.dirtyWarbandBankSet)
     elseif next(self.dirtyWarbandBankSet) ~= nil and self:CanScanWarband() then
         local root = self:GetBankRoot()
-        local changed = root and self:CommitDirtyView(root.warband, self.dirtyWarbandBankSet, ACCOUNT_BANK_BAG_IDS) or nil
+        local changed
+        if root then
+            changed = self:CommitDirtyView(root.warband, self.dirtyWarbandBankSet, ACCOUNT_BANK_BAG_IDS)
+        end
         if changed == nil then
             anyChanged = self:DoFullWarbandRescan() or anyChanged
         else
@@ -980,8 +870,9 @@ function BankStore:GetCategoryListFromView(view)
     end
 
     local categories = {}
-    for i = 1, #CATEGORY_ORDER do
-        local categoryKey = CATEGORY_ORDER[i]
+    local categoryOrder = BagsStore:GetCategoryKeys()
+    for i = 1, #categoryOrder do
+        local categoryKey = categoryOrder[i]
         local count = tonumber(view.categoryTotals[categoryKey]) or 0
         if count > 0 then
             categories[#categories + 1] = {

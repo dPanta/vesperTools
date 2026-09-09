@@ -397,30 +397,40 @@ function vesperTools:CreateContainerItemButton(host, parent, options)
     itemLevel:Hide()
     button.itemLevel = itemLevel
 
-    local secureUseButton = CreateFrame("Button", nil, button, "SecureActionButtonTemplate")
-    secureUseButton:SetAllPoints(button)
-    secureUseButton:SetFrameLevel(button:GetFrameLevel() + 10)
-    secureUseButton:RegisterForClicks("RightButtonUp", "RightButtonDown")
-    secureUseButton:SetAttribute("useOnKeyDown", false)
-    secureUseButton:SetAttribute("pressAndHoldAction", false)
-    secureUseButton:EnableMouse(false)
-    secureUseButton:Hide()
-    button.secureUseButton = secureUseButton
+    -- A SecureActionButton child protects its ancestors even while hidden.
+    -- Carried bags use native ItemButtons and must opt out before construction.
+    local secureUseButton
+    if not options or options.createSecureUseButton ~= false then
+        secureUseButton = CreateFrame("Button", nil, button, "SecureActionButtonTemplate")
+        secureUseButton:SetAllPoints(button)
+        secureUseButton:SetFrameLevel(button:GetFrameLevel() + 10)
+        secureUseButton:RegisterForClicks("RightButtonUp", "RightButtonDown")
+        secureUseButton:SetAttribute("useOnKeyDown", false)
+        secureUseButton:SetAttribute("pressAndHoldAction", false)
+        secureUseButton:EnableMouse(false)
+        secureUseButton:Hide()
+        button.secureUseButton = secureUseButton
+    end
 
     if options and type(options.onEnter) == "function" then
         button:SetScript("OnEnter", function(selfButton)
             options.onEnter(host, selfButton)
         end)
-        secureUseButton:SetScript("OnEnter", function(selfButton)
-            options.onEnter(host, selfButton.ownerItemButton or button)
-        end)
+        if secureUseButton then
+            secureUseButton:SetScript("OnEnter", function(selfButton)
+                options.onEnter(host, selfButton.ownerItemButton or button)
+            end)
+        end
     end
     button:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
-    secureUseButton:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
+    if secureUseButton then
+        secureUseButton:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+    end
+
     if options and type(options.onClick) == "function" then
         button:SetScript("OnClick", function(selfButton, mouseButton)
             if mouseButton == "RightButton" and selfButton.vgSecureUseConfigured and not isStackSplitClick(mouseButton) then
@@ -428,61 +438,63 @@ function vesperTools:CreateContainerItemButton(host, parent, options)
             end
             options.onClick(host, selfButton, mouseButton)
         end)
-        secureUseButton:SetScript("PreClick", function(selfButton, mouseButton)
-            if not isStackSplitClick(mouseButton) then
-                return
-            end
-            if InCombatLockdown and InCombatLockdown() then
-                return
-            end
+        if secureUseButton then
+            secureUseButton:SetScript("PreClick", function(selfButton, mouseButton)
+                if not isStackSplitClick(mouseButton) then
+                    return
+                end
+                if InCombatLockdown and InCombatLockdown() then
+                    return
+                end
 
-            local ownerButton = selfButton.ownerItemButton or button
-            selfButton.vgSplitSuppressedType = selfButton:GetAttribute("type")
-            selfButton.vgSplitSuppressedItem = selfButton:GetAttribute("item")
-            selfButton.vgSplitSuppressedBag = selfButton:GetAttribute("bag")
-            selfButton.vgSplitSuppressedSlot = selfButton:GetAttribute("slot")
-            selfButton.vgSplitSuppressedType2 = selfButton:GetAttribute("type2")
-            selfButton.vgSplitSuppressedItem2 = selfButton:GetAttribute("item2")
-            selfButton.vgSplitSuppressedBag2 = selfButton:GetAttribute("bag2")
-            selfButton.vgSplitSuppressedSlot2 = selfButton:GetAttribute("slot2")
-            selfButton.vgSplitSuppressedMacrotext2 = selfButton:GetAttribute("macrotext2")
-            selfButton.vgSplitSuppressRightClick = true
-            selfButton:SetAttribute("type", nil)
-            selfButton:SetAttribute("item", nil)
-            selfButton:SetAttribute("bag", nil)
-            selfButton:SetAttribute("slot", nil)
-            selfButton:SetAttribute("type2", nil)
-            selfButton:SetAttribute("item2", nil)
-            selfButton:SetAttribute("bag2", nil)
-            selfButton:SetAttribute("slot2", nil)
-            selfButton:SetAttribute("macrotext2", nil)
-            options.onClick(host, ownerButton, mouseButton)
-        end)
-        secureUseButton:SetScript("PostClick", function(selfButton)
-            if not selfButton.vgSplitSuppressRightClick then
-                return
-            end
+                local ownerButton = selfButton.ownerItemButton or button
+                selfButton.vgSplitSuppressedType = selfButton:GetAttribute("type")
+                selfButton.vgSplitSuppressedItem = selfButton:GetAttribute("item")
+                selfButton.vgSplitSuppressedBag = selfButton:GetAttribute("bag")
+                selfButton.vgSplitSuppressedSlot = selfButton:GetAttribute("slot")
+                selfButton.vgSplitSuppressedType2 = selfButton:GetAttribute("type2")
+                selfButton.vgSplitSuppressedItem2 = selfButton:GetAttribute("item2")
+                selfButton.vgSplitSuppressedBag2 = selfButton:GetAttribute("bag2")
+                selfButton.vgSplitSuppressedSlot2 = selfButton:GetAttribute("slot2")
+                selfButton.vgSplitSuppressedMacrotext2 = selfButton:GetAttribute("macrotext2")
+                selfButton.vgSplitSuppressRightClick = true
+                selfButton:SetAttribute("type", nil)
+                selfButton:SetAttribute("item", nil)
+                selfButton:SetAttribute("bag", nil)
+                selfButton:SetAttribute("slot", nil)
+                selfButton:SetAttribute("type2", nil)
+                selfButton:SetAttribute("item2", nil)
+                selfButton:SetAttribute("bag2", nil)
+                selfButton:SetAttribute("slot2", nil)
+                selfButton:SetAttribute("macrotext2", nil)
+                options.onClick(host, ownerButton, mouseButton)
+            end)
+            secureUseButton:SetScript("PostClick", function(selfButton)
+                if not selfButton.vgSplitSuppressRightClick then
+                    return
+                end
 
-            selfButton:SetAttribute("type", selfButton.vgSplitSuppressedType)
-            selfButton:SetAttribute("item", selfButton.vgSplitSuppressedItem)
-            selfButton:SetAttribute("bag", selfButton.vgSplitSuppressedBag)
-            selfButton:SetAttribute("slot", selfButton.vgSplitSuppressedSlot)
-            selfButton:SetAttribute("type2", selfButton.vgSplitSuppressedType2)
-            selfButton:SetAttribute("item2", selfButton.vgSplitSuppressedItem2)
-            selfButton:SetAttribute("bag2", selfButton.vgSplitSuppressedBag2)
-            selfButton:SetAttribute("slot2", selfButton.vgSplitSuppressedSlot2)
-            selfButton:SetAttribute("macrotext2", selfButton.vgSplitSuppressedMacrotext2)
-            selfButton.vgSplitSuppressedType = nil
-            selfButton.vgSplitSuppressedItem = nil
-            selfButton.vgSplitSuppressedBag = nil
-            selfButton.vgSplitSuppressedSlot = nil
-            selfButton.vgSplitSuppressedType2 = nil
-            selfButton.vgSplitSuppressedItem2 = nil
-            selfButton.vgSplitSuppressedBag2 = nil
-            selfButton.vgSplitSuppressedSlot2 = nil
-            selfButton.vgSplitSuppressedMacrotext2 = nil
-            selfButton.vgSplitSuppressRightClick = nil
-        end)
+                selfButton:SetAttribute("type", selfButton.vgSplitSuppressedType)
+                selfButton:SetAttribute("item", selfButton.vgSplitSuppressedItem)
+                selfButton:SetAttribute("bag", selfButton.vgSplitSuppressedBag)
+                selfButton:SetAttribute("slot", selfButton.vgSplitSuppressedSlot)
+                selfButton:SetAttribute("type2", selfButton.vgSplitSuppressedType2)
+                selfButton:SetAttribute("item2", selfButton.vgSplitSuppressedItem2)
+                selfButton:SetAttribute("bag2", selfButton.vgSplitSuppressedBag2)
+                selfButton:SetAttribute("slot2", selfButton.vgSplitSuppressedSlot2)
+                selfButton:SetAttribute("macrotext2", selfButton.vgSplitSuppressedMacrotext2)
+                selfButton.vgSplitSuppressedType = nil
+                selfButton.vgSplitSuppressedItem = nil
+                selfButton.vgSplitSuppressedBag = nil
+                selfButton.vgSplitSuppressedSlot = nil
+                selfButton.vgSplitSuppressedType2 = nil
+                selfButton.vgSplitSuppressedItem2 = nil
+                selfButton.vgSplitSuppressedBag2 = nil
+                selfButton.vgSplitSuppressedSlot2 = nil
+                selfButton.vgSplitSuppressedMacrotext2 = nil
+                selfButton.vgSplitSuppressRightClick = nil
+            end)
+        end
     end
     if options and type(options.onDragStart) == "function" then
         button:SetScript("OnDragStart", function(selfButton)
@@ -980,65 +992,43 @@ function vesperTools:CreateContainerItemController(host, config)
     end
 
     function controller:UpdateNativeContainerOverlay(button)
+        local overlay = button.nativeContainerOverlay
+        -- Native ItemButtons can be updated in combat. Only defer if a caller
+        -- actually attached protected children (e.g. the bank secure fallback).
+        if InCombatLockdown() and (button:IsProtected() or (overlay and overlay:IsProtected())) then
+            if host.pendingSecureItemRefresh ~= nil then
+                host.pendingSecureItemRefresh = true
+            end
+            return
+        end
+
         local shouldUseNativeOverlay = self:ShouldUseNativeOverlay(button)
-        local overlay = button.nativeContainerOverlay or (shouldUseNativeOverlay and self:AcquireNativeContainerOverlay(button)) or nil
+        overlay = overlay or (shouldUseNativeOverlay and self:AcquireNativeContainerOverlay(button)) or nil
         if not overlay then
             return
         end
 
         if not shouldUseNativeOverlay then
-            if type(InCombatLockdown) == "function" and InCombatLockdown() then
-                if host.pendingSecureItemRefresh ~= nil then
-                    host.pendingSecureItemRefresh = true
-                end
-                return
-            end
-
             overlay:EnableMouse(false)
             overlay:Hide()
             return
         end
 
+        local bagID, slotID = self:GetNativeOverlayBagSlot(button)
+        -- Use Blizzard's attribute-backed setter: assigning bagID directly (or
+        -- deriving it from an addon-owned parent) taints native item interaction.
+        overlay:SetBagID(bagID)
+        overlay:SetID(slotID)
+        overlay:UpdateExtended()
         overlay:EnableMouse(self:GetOverlayMouseEnabled(button))
         if not self:ConfigureNativeContainerOverlayInput(overlay, button) then
             return
         end
 
-        if shouldUseNativeOverlay then
-            local overlayBagID, overlaySlotID = self:GetNativeOverlayBagSlot(button)
-            if overlayBagID ~= nil and type(button.SetID) == "function" then
-                button:SetID(overlayBagID)
-            end
-            local currentBagID = overlay.GetBagID and overlay:GetBagID() or nil
-            local needsRefresh = not overlay:IsShown()
-                or overlay:GetID() ~= overlaySlotID
-                or currentBagID ~= overlayBagID
-
-            if needsRefresh then
-                if host.pendingSecureItemRefresh ~= nil and InCombatLockdown() then
-                    host.pendingSecureItemRefresh = true
-                    return
-                end
-                overlay:SetID(overlaySlotID)
-                if type(overlay.UpdateExtended) == "function" then
-                    overlay:UpdateExtended()
-                end
-            end
-
-            overlay:SetAllPoints(button)
-            overlay:SetFrameLevel(button:GetFrameLevel() + 10)
-            suppressNativeOverlayVisuals(overlay)
-            overlay:Show()
-            return
-        end
-
-        if overlay:IsShown() then
-            if host.pendingSecureItemRefresh ~= nil and InCombatLockdown() then
-                host.pendingSecureItemRefresh = true
-                return
-            end
-            overlay:Hide()
-        end
+        overlay:SetAllPoints(button)
+        overlay:SetFrameLevel(button:GetFrameLevel() + 10)
+        suppressNativeOverlayVisuals(overlay)
+        overlay:Show()
     end
 
     function controller:ConfigureItemButton(button, record, context, viewSettings)

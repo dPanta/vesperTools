@@ -1,3 +1,21 @@
+## 7.5.0 - 2026-09-09
+
+### Added
+- Enhancements category for gems and permanent/temporary enchants across expansions, shared by bags, character banks, and the Warband bank.
+- Spark of Tides ID-based seasonal classification and offline inventory category migration.
+- Standalone bag/bank regression checks and a detailed Retail 12.1.0 audit in `docs/12.1.0-bags-bank-audit.md`.
+
+### Changed
+- Banks now share bag metadata and category rules, including Season and Past Expansions.
+- Coalesced inventory window refreshes and incremental current-character account-index updates reduce repeated work.
+
+### Fixed
+- Bags can now open, close, and refresh during combat without blocked frame actions. Right-clicking consumables works in individual and combined views, with click targets updated as inventory changes.
+- Missing item data now refreshes categories, names, and tooltip search after loading.
+- Different item-link variants no longer inherit each other's cached level and description; old level-80 upgrade-track gear stays in Past Expansions.
+- Unchanged Warband scans no longer trigger a full rescan; bank API access failures preserve cached data.
+- Bank tab/settings updates now schedule their own refresh instead of waiting for an unrelated bag event.
+
 ## 7.4.0 - 2026-08-24
 
 ### Added
