@@ -1,3 +1,8 @@
+## 7.6.2 - 2026-10-05
+
+### Changed
+- Best-run lines in roster keystone tooltips now highlight current party members in teal and your own character in pink. Your highlight takes priority and also appears when solo; both the name and run text use the highlight color.
+
 ## 7.6.1 - 2026-10-05
 
 ### Added

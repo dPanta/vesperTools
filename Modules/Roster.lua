@@ -1999,6 +1999,7 @@ function Roster:BuildGuildBestTooltip(mapID, dataHandle)
                     seen[shortName] = true
                     entries[#entries + 1] = {
                         name = shortName,
+                        fullName = playerName,
                         level = info.level,
                         inTime = info.inTime,
                     }
@@ -2028,6 +2029,22 @@ function Roster:BuildGuildBestTooltip(mapID, dataHandle)
         return a.level > b.level
     end)
 
+    local highlightColors = {}
+    local function highlightUnit(unit, color)
+        local fullName = getUnitFullName(unit)
+        if fullName then
+            highlightColors[fullName] = color
+            -- Guild-leader fallback entries may only supply a short name.
+            highlightColors[fullName:match("([^-]+)") or fullName] = color
+        end
+    end
+    local partyColor = { 0, 0.8, 0.8 }
+    for partyIndex = 1, 4 do
+        highlightUnit("party" .. partyIndex, partyColor)
+    end
+    -- Self takes priority over party highlights, including when solo.
+    highlightUnit("player", { 1, 105 / 255, 180 / 255 })
+
     for i = 1, #entries do
         local entry = entries[i]
         local runText = "+" .. entry.level
@@ -2041,7 +2058,13 @@ function Roster:BuildGuildBestTooltip(mapID, dataHandle)
             r, g, b = 229 / 255, 115 / 255, 115 / 255
             runText = runText .. " (" .. L["BEST_KEYS_STATUS_OVER"] .. ")"
         end
-        GameTooltip:AddDoubleLine(entry.name, runText, 1, 1, 1, r, g, b)
+        local nameR, nameG, nameB = 1, 1, 1
+        local highlight = highlightColors[entry.fullName or entry.name]
+        if highlight then
+            nameR, nameG, nameB = highlight[1], highlight[2], highlight[3]
+            r, g, b = nameR, nameG, nameB
+        end
+        GameTooltip:AddDoubleLine(entry.name, runText, nameR, nameG, nameB, r, g, b)
     end
 
     if #entries == 0 then
