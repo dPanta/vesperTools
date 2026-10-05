@@ -1,3 +1,8 @@
+## 7.6.0 - 2026-10-05
+
+### Fixed
+- Roster keystone tooltips now distinguish guild members' best dungeon runs with green key levels and a "timed" label for in-time runs, or red key levels and an "over" label for over-time runs. Key-level rarity colors no longer override timing colors. Entries from Blizzard's guild leaderboard remain gray when timing status is unavailable.
+
 ## 7.5.0 - 2026-09-09
 
 ### Added

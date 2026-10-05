@@ -2030,12 +2030,18 @@ function Roster:BuildGuildBestTooltip(mapID, dataHandle)
 
     for i = 1, #entries do
         local entry = entries[i]
-        local colorCode = dataHandle and dataHandle:GetKeyColor(entry.level) or "|cffffffff"
+        local runText = "+" .. entry.level
+        -- Guild-leader fallback entries have no timing flag; keep them neutral.
+        -- Inline key-rarity colors would override these timing-status colors.
         local r, g, b = 0.8, 0.8, 0.8
-        if entry.inTime then
-            r, g, b = 0.51, 0.78, 0.52
+        if entry.inTime == true then
+            r, g, b = 129 / 255, 199 / 255, 132 / 255
+            runText = runText .. " (" .. L["BEST_KEYS_STATUS_TIMED"] .. ")"
+        elseif entry.inTime == false then
+            r, g, b = 229 / 255, 115 / 255, 115 / 255
+            runText = runText .. " (" .. L["BEST_KEYS_STATUS_OVER"] .. ")"
         end
-        GameTooltip:AddDoubleLine(entry.name, colorCode .. "+" .. entry.level .. "|r", 1, 1, 1, r, g, b)
+        GameTooltip:AddDoubleLine(entry.name, runText, 1, 1, 1, r, g, b)
     end
 
     if #entries == 0 then
