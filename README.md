@@ -40,11 +40,14 @@
 - `/vg reset`: reset the sheep icon and addon window positions.
 - `/vg keys` or `/vg debug`: print stored keystone data to chat.
 - `/vg bestkeys`: print the stored best-run database to chat.
+- `/vg checkalts`: preview safe duplicate-character cleanup without changing data.
+- `/vg cleanalts`: run duplicate-character cleanup again and report the result.
 
 ## Notes
 
 - Sync features work best when other guild members also use the addon.
 - Account-wide bags, bank, warband bank, vault, and account-keystone views depend on characters being logged in so their data can be saved.
 - The account keystone panel only shows characters that currently have a stored keystone snapshot.
+- Login automatically reconciles duplicate names on the same realm after character services. The live GUID takes priority; offline characters use the uniquely newest saved identity with a matching class. Ambiguous matches stay untouched. Original bags, bank, and vault records are preserved in `vesperToolsBagsDB.global.characterIdentityArchive` before cleanup; current key/rating snapshots remain intact.
 - Guild item lookup only returns results from guildmates who enable bag-data sharing in the addon.
 - All shipped locale files now contain the same key set. Some entries may still display English fallback text until they receive a dedicated translation.

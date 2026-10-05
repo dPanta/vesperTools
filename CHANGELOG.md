@@ -1,3 +1,12 @@
+## 7.6.1 - 2026-10-05
+
+### Added
+- `/vg checkalts` previews duplicate-character cleanup without changing saved data; `/vg cleanalts` runs cleanup manually and reports the result.
+
+### Fixed
+- Duplicate alt rows after race/faction changes are reconciled on login across bags, bank, vault, and the account key/rating panel. Cleanup keeps the current or uniquely newest matching character identity, archives old records, preserves key/rating snapshots, rebuilds inventory totals, and updates saved character selections. Ambiguous matches remain untouched.
+- The custom toy flyout stays open while hovering its panel or toy buttons. Entering the flyout cancels the pending close timer, and the existing 0.5-second gap-crossing delay starts again only after leaving. Hover detection now uses the native frame API instead of the obsolete global helper.
+
 ## 7.6.0 - 2026-10-05
 
 ### Fixed

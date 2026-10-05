@@ -1661,6 +1661,7 @@ function Portals:CreateToyFlyoutFrame()
 
     local buttonSize = self:GetTopUtilityButtonSize()
     self.toyFlyoutFrame = CreateFrame("Frame", "vesperToolsToyFlyoutFrame", self.topUtilityFrame, "BackdropTemplate")
+    self.toyFlyoutFrame:EnableMouse(true)
     self.toyFlyoutFrame:SetSize(buttonSize + (TOY_FLYOUT_PADDING * 2), buttonSize + (TOY_FLYOUT_PADDING * 2))
     vesperTools:ApplyAddonWindowLayer(self.toyFlyoutFrame, (self.topUtilityFrame:GetFrameLevel() or 0) + 2)
     vesperTools:ApplyRoundedWindowBackdrop(self.toyFlyoutFrame)
@@ -1807,7 +1808,10 @@ function Portals:IsToyFlyoutMouseActive()
     if not self.toyFlyoutButton or not self.toyFlyoutFrame then
         return false
     end
-    return MouseIsOver and (MouseIsOver(self.toyFlyoutButton) or MouseIsOver(self.toyFlyoutFrame)) or false
+    -- Use the native region API so hover detection works without the old global.
+    -- The panel rectangle also covers padding and gaps between toy buttons.
+    return (self.toyFlyoutButton:IsShown() and self.toyFlyoutButton:IsMouseOver())
+        or (self.toyFlyoutFrame:IsShown() and self.toyFlyoutFrame:IsMouseOver())
 end
 
 -- Delay hide to avoid flicker while moving cursor between button and flyout.
@@ -1850,6 +1854,14 @@ function Portals:CreateToyFlyoutActionButton(parent)
     local buttonSize = self:GetTopUtilityButtonSize()
     button:SetSize(buttonSize, buttonSize)
     button:RegisterForClicks("AnyUp", "AnyDown")
+    -- Child buttons receive hover events instead of the panel beneath them.
+    -- Retain their tooltip handlers while taking over the pending hide timer.
+    button:HookScript("OnEnter", function()
+        self:ShowToyFlyout()
+    end)
+    button:HookScript("OnLeave", function()
+        self:ScheduleToyFlyoutHideCheck()
+    end)
     return button
 end
 

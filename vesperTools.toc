@@ -2,7 +2,7 @@
 ## Title: vesperTools
 ## Notes: Various Things for Various other things.
 ## Author: dPanta
-## Version: 7.6.0
+## Version: 7.6.1
 ## IconTexture: Interface\AddOns\vesperTools\Media\vesperTools.png
 ## SavedVariables: vesperToolsDB, vesperToolsBagsDB, VesperGuildDB, VesperGuildBagsDB
 ## X-Wago-ID: XKqAw8Ky
@@ -45,6 +45,7 @@ Core\TimerService.lua
 vesperTools.lua
 
 # Modules
+Modules\CharacterIdentity.lua
 Modules\DataHandle.lua
 Modules\MidnightLureMap.lua
 Modules\GroupActionButtons.lua

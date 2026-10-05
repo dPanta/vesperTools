@@ -4475,6 +4475,9 @@ function vesperTools:HandleChatCommand(input)
         else
             self:Print(L["AUTOMATION_MODULE_NOT_FOUND"])
         end
+    elseif loweredInput == "checkalts" or loweredInput == "cleanalts" then
+        local identity = self:GetModule("CharacterIdentity", true)
+        if identity then identity:ReportCleanup(loweredInput == "checkalts") end
     elseif loweredInput == "debug" or loweredInput == "keys" then
         -- Debug: Dump keystone database
         local KeystoneSync = self:GetModule("KeystoneSync", true)
