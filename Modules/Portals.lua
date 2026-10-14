@@ -796,6 +796,16 @@ function Portals:GetRandomDiscoCooldownItemID(button)
     return activePreferredID or activeFallbackID or fallbackID
 end
 
+local function setCooldownIfUnprotected(cooldownFrame, start, duration, modRate)
+    -- Retail 12.1.5 protects cooldown setters on protected widgets. pcall
+    -- cannot prevent a blocked-action report, so check before invoking them.
+    if cooldownFrame.IsProtected and cooldownFrame:IsProtected() then
+        return false
+    end
+
+    return pcall(cooldownFrame.SetCooldown, cooldownFrame, start, duration, modRate)
+end
+
 -- Reset one button back to an idle no-cooldown state.
 function Portals:ClearButtonCooldown(button)
     if not button then
@@ -807,7 +817,7 @@ function Portals:ClearButtonCooldown(button)
     button._cooldownModRate = nil
 
     if button.cooldownFrame then
-        pcall(button.cooldownFrame.SetCooldown, button.cooldownFrame, 0, 0, 1)
+        setCooldownIfUnprotected(button.cooldownFrame, 0, 0, 1)
         button.cooldownFrame:Hide()
     end
 
@@ -997,10 +1007,7 @@ function Portals:RefreshButtonCooldown(button, now)
     button._cooldownModRate = (tonumber(modRate) and tonumber(modRate) > 0) and tonumber(modRate) or 1
     button.cooldownFrame:Show()
 
-    local ok = pcall(button.cooldownFrame.SetCooldown, button.cooldownFrame, start, duration, button._cooldownModRate)
-    if not ok then
-        pcall(button.cooldownFrame.SetCooldown, button.cooldownFrame, start, duration)
-    end
+    setCooldownIfUnprotected(button.cooldownFrame, start, duration, button._cooldownModRate)
 
     return self:UpdateButtonCooldownText(button, now)
 end

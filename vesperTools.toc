@@ -1,8 +1,8 @@
-## Interface: 120007, 120100
+## Interface: 120007, 120100, 120105
 ## Title: vesperTools
 ## Notes: Various Things for Various other things.
 ## Author: dPanta
-## Version: 7.6.2
+## Version: 7.7.0
 ## IconTexture: Interface\AddOns\vesperTools\Media\vesperTools.png
 ## SavedVariables: vesperToolsDB, vesperToolsBagsDB, VesperGuildDB, VesperGuildBagsDB
 ## X-Wago-ID: XKqAw8Ky

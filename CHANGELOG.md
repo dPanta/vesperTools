@@ -1,3 +1,15 @@
+## 7.7.0 - 2026-10-14
+
+### Changed
+- Added Retail 12.1.5 compatibility (`120105`), retaining the existing 12.0.7 and 12.1.0 interface declarations.
+- Audited addon APIs, events, enums, Blizzard UI integrations, and bundled library callsites against Blizzard's 12.1.5 build 70391 source. Details are in `docs/12.1.5-api-audit.md`.
+
+### Fixed
+- Portal and travel cooldown refresh/reset paths now check whether the cooldown widget is protected before calling its setter, respecting 12.1.5 restrictions without relying on `pcall` to suppress blocked actions. Numeric countdowns continue using public cooldown data.
+
+### Added
+- Regression checks for protected cooldown refresh/reset, ordinary cooldown display, expiry, rate modifiers, global cooldown filtering, and secret-value handling.
+
 ## 7.6.2 - 2026-10-05
 
 ### Changed
