@@ -2705,6 +2705,7 @@ end
 function vesperTools:GetAvailableHearthstoneOptions()
     local options = {}
     local catalog = getMergedHearthstoneCatalog()
+    local getItemCount = C_Item and C_Item.GetItemCount or GetItemCount
 
     for i = 1, #catalog do
         local itemID = catalog[i]
@@ -2716,7 +2717,9 @@ function vesperTools:GetAvailableHearthstoneOptions()
         else
             -- Search bags + bank + reagent bank: alts often park the physical
             -- hearthstone in bank, and we still want to surface the button.
-            isOwned = (GetItemCount(itemID, true, false, true) or 0) > 0
+            if type(getItemCount) == "function" then
+                isOwned = (getItemCount(itemID, true, false, true) or 0) > 0
+            end
         end
 
         if isOwned then

@@ -1,3 +1,11 @@
+## 7.7.1 - 2026-10-15
+
+### Fixed
+- Fixed a crash while creating or refreshing the Portals window when the legacy `GetItemCount` global is unavailable. Physical hearthstone ownership now uses `C_Item.GetItemCount`, with a guarded legacy fallback, preserving bag and bank searches and owned toy options.
+
+### Added
+- Regression checks for hearthstone ownership with the modern item-count API, legacy fallback, missing APIs, and zero or nil counts.
+
 ## 7.7.0 - 2026-10-14
 
 ### Changed
