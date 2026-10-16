@@ -1,3 +1,12 @@
+## 7.7.2 - 2026-10-16
+
+### Fixed
+- Fixed a crash while creating or refreshing the Portals window when hearthstone metadata is unavailable and the legacy `GetItemInfo` global is missing. Item names and icons now use `C_Item.GetItemInfo` with guarded legacy fallbacks and safe placeholders for uncached data.
+- Corrected item icon extraction from the `GetItemInfo` and `GetItemInfoInstant` return values, and guarded the legacy `GetItemInfoInstant` fallback.
+
+### Added
+- Regression checks for uncached Garrison Hearthstone metadata, missing legacy item APIs, modern item name/icon results, and legacy fallbacks.
+
 ## 7.7.1 - 2026-10-15
 
 ### Fixed

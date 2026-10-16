@@ -1079,7 +1079,16 @@ local function getItemNameAndIcon(itemID)
         end
     end
 
-    if not name or name == "" then
+    -- GetItemInfo returns a tuple; its tenth result is the icon texture.
+    if (not name or name == "" or not icon) and C_Item and type(C_Item.GetItemInfo) == "function" then
+        local itemName, _, _, _, _, _, _, _, _, itemIcon = C_Item.GetItemInfo(itemID)
+        if (not name or name == "") and type(itemName) == "string" and itemName ~= "" then
+            name = itemName
+        end
+        icon = icon or normalizeIcon(itemIcon)
+    end
+
+    if (not name or name == "") and type(GetItemInfo) == "function" then
         local itemName = GetItemInfo(itemID)
         if type(itemName) == "string" and itemName ~= "" then
             name = itemName
@@ -1090,27 +1099,14 @@ local function getItemNameAndIcon(itemID)
         icon = normalizeIcon(C_Item.GetItemIconByID(itemID)) or icon
     end
 
-    if not icon and C_Item and C_Item.GetItemInfoInstant then
-        local i1, i2, i3, i4, i5, i6, i7, i8, i9, i10 = C_Item.GetItemInfoInstant(itemID)
-        icon = normalizeIcon(i3)
-            or normalizeIcon(i5)
-            or normalizeIcon(i10)
-            or icon
+    if not icon and C_Item and type(C_Item.GetItemInfoInstant) == "function" then
+        local _, _, _, _, itemIcon = C_Item.GetItemInfoInstant(itemID)
+        icon = normalizeIcon(itemIcon)
     end
 
-    if not icon then
-        local i1, i2, i3, i4, i5, i6, i7, i8, i9, i10 = GetItemInfoInstant(itemID)
-        icon = normalizeIcon(i3)
-            or normalizeIcon(i5)
-            or normalizeIcon(i10)
-            or icon
-    end
-
-    if not icon and C_Item and C_Item.GetItemInfo then
-        local itemInfo = C_Item.GetItemInfo(itemID)
-        if type(itemInfo) == "table" then
-            icon = normalizeIcon(itemInfo.iconFileID) or icon
-        end
+    if not icon and type(GetItemInfoInstant) == "function" then
+        local _, _, _, _, itemIcon = GetItemInfoInstant(itemID)
+        icon = normalizeIcon(itemIcon)
     end
 
     -- Mirror portal-button style: item spell icon is often the most stable visual for toys/items.
