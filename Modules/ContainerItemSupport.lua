@@ -8,12 +8,46 @@ local STACK_SPLIT_FRAME_STRATA = "TOOLTIP"
 local stackSplitFrameLayerHooked = false
 local lastStackSplitOwner = nil
 
+-- Match EllesmereUI's gear-track palette, independently of item rarity.
+local UPGRADE_TRACK_COLORS = {
+    Explorer = { 0.62, 0.62, 0.62 },
+    Adventurer = { 1.00, 1.00, 1.00 },
+    Veteran = { 0.12, 1.00, 0.00 },
+    Champion = { 0.00, 0.44, 0.87 },
+    Hero = { 1.00, 0.30, 1.00 },
+    Myth = { 1.00, 0.50, 0.00 },
+}
+-- GetItemUpgradeInfo returns a localized trackString. These aliases follow
+-- EllesmereUI's track lookup; unknown/new tracks fall back to item rarity.
+local UPGRADE_TRACK_NAMES = {
+    Explorer = { "Explorer", "Expedicionario", "Forscher", "Explorateur", "Esploratore", "Explorador", "Delve", "Исследователь", "탐험가", "探索者", "探險者" },
+    Adventurer = { "Adventurer", "Aventurero", "Abenteurer", "Aventurier", "Avventuriero", "Aventureiro", "Искатель приключений", "모험가", "冒险者", "冒險者" },
+    Veteran = { "Veteran", "Veterano", "Vétéran", "Ветеран", "노련가", "老兵", "精兵" },
+    Champion = { "Champion", "Campeón", "Campione", "Campeão", "Защитник", "챔피언", "勇士" },
+    Hero = { "Hero", "Héroe", "Held", "Héros", "Eroe", "Heroí", "Герой", "영웅", "英雄" },
+    Myth = { "Myth", "Mito", "Mythos", "Mythe", "Легенда", "신화", "神话", "神話" },
+}
+local UPGRADE_TRACK_COLOR_BY_NAME = {}
+for track, names in pairs(UPGRADE_TRACK_NAMES) do
+    for _, name in ipairs(names) do
+        UPGRADE_TRACK_COLOR_BY_NAME[name] = UPGRADE_TRACK_COLORS[track]
+    end
+end
+-- Midnight Season 2 crafted crest bonuses, also used by EllesmereUI.
+-- Source: https://www.raidbots.com/static/data/live/bonuses.json
+local CRAFTED_TRACK_COLORS_BY_BONUS = {
+    [13835] = UPGRADE_TRACK_COLORS.Hero,
+    [13836] = UPGRADE_TRACK_COLORS.Myth,
+}
+
 local function safeColorForQuality(quality)
     if quality == nil then
         return 0.18, 0.18, 0.18
     end
 
-    local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+    local color = ColorManager and ColorManager.GetColorDataForBagItemQuality
+        and ColorManager.GetColorDataForBagItemQuality(quality)
+    color = color or (ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality])
     if color then
         return color.r or 0.18, color.g or 0.18, color.b or 0.18
     end
@@ -80,16 +114,58 @@ local function canDisplayItemLevel(record)
         return false
     end
 
-    local classID
-    if C_Item and C_Item.GetItemInfoInstant then
+    local classID = record.classID
+    if classID == nil and C_Item and C_Item.GetItemInfoInstant then
         local _, _, _, _, _, resolvedClassID = C_Item.GetItemInfoInstant(record.itemID)
         classID = resolvedClassID
-    elseif GetItemInfoInstant then
+    elseif classID == nil and GetItemInfoInstant then
         local _, _, _, _, _, resolvedClassID = GetItemInfoInstant(record.itemID)
         classID = resolvedClassID
     end
 
     return classID == ITEM_CLASS.Weapon or classID == ITEM_CLASS.Armor
+end
+
+local function getCraftedTrackColor(itemLink)
+    local payload = itemLink:match("item:([^|]+)")
+    if not payload then
+        return nil
+    end
+
+    -- Only examine the counted bonus IDs, not enchant/gem IDs or the tail.
+    local index, lastBonus = 0, 13
+    for field in (payload .. ":"):gmatch("([^:]*):") do
+        index = index + 1
+        if index == 13 then
+            lastBonus = 13 + (tonumber(field) or 0)
+        elseif index > 13 then
+            if index > lastBonus then
+                break
+            end
+            local color = CRAFTED_TRACK_COLORS_BY_BONUS[tonumber(field)]
+            if color then
+                return color
+            end
+        end
+    end
+
+    return nil
+end
+
+local function getItemColorForRecord(record)
+    local link = record and record.hyperlink
+    -- The full link distinguishes Hero/Myth variants sharing the same itemID,
+    -- and works for saved characters without consulting their old bag slots.
+    if type(link) == "string" and link ~= "" and canDisplayItemLevel(record) then
+        local upgradeInfo = C_Item and C_Item.GetItemUpgradeInfo and C_Item.GetItemUpgradeInfo(link)
+        local color = upgradeInfo and UPGRADE_TRACK_COLOR_BY_NAME[upgradeInfo.trackString]
+        color = color or getCraftedTrackColor(link)
+        if color then
+            return color[1], color[2], color[3]
+        end
+    end
+
+    return safeColorForQuality(record and record.quality)
 end
 
 local function getItemLevelForRecord(record)
@@ -397,6 +473,9 @@ function vesperTools:CreateContainerItemButton(host, parent, options)
     itemLevel:Hide()
     button.itemLevel = itemLevel
 
+    -- Keep crafted equipment quality visible outside the professions UI too.
+    button.alwaysShowProfessionsQuality = true
+
     -- A SecureActionButton child protects its ancestors even while hidden.
     -- Carried bags use native ItemButtons and must opt out before construction.
     local secureUseButton
@@ -541,6 +620,10 @@ function vesperTools:CreateContainerItemController(host, config)
 
     function controller:GetItemLevelForRecord(record)
         return getItemLevelForRecord(record)
+    end
+
+    function controller:GetItemColorForRecord(record)
+        return getItemColorForRecord(record)
     end
 
     function controller:ConfigureTooltip(button)
@@ -1069,7 +1152,26 @@ function vesperTools:CreateContainerItemController(host, config)
         button.icon:SetTexture(record.iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark")
         button.count:SetText(((button.isCombined and button.totalCount > 1) or (tonumber(record.stackCount) or 1) > 1) and tostring(button.totalCount) or "")
 
-        local r, g, b = safeColorForQuality(record.quality)
+        -- Pooled buttons must lose the previous item's badge before resolving
+        -- Blizzard's inventory atlas. Use the full link for crafted variants
+        -- and saved characters, whose bag/slot may belong to another item now.
+        if ClearItemCraftingQualityOverlay then
+            ClearItemCraftingQualityOverlay(button)
+        end
+        if SetItemCraftingQualityOverlay then
+            SetItemCraftingQualityOverlay(button, record.hyperlink or record.itemID)
+        end
+
+        button.itemLevel:ClearAllPoints()
+        if button.ProfessionQualityOverlay and button.ProfessionQualityOverlay:IsShown() then
+            button.itemLevel:SetPoint("TOPRIGHT", -3, -2)
+            button.itemLevel:SetJustifyH("RIGHT")
+        else
+            button.itemLevel:SetPoint("TOPLEFT", 3, -2)
+            button.itemLevel:SetJustifyH("LEFT")
+        end
+
+        local r, g, b = self:GetItemColorForRecord(record)
         if (viewSettings and viewSettings.qualityGlowIntensity or 0) > 0 and record.quality ~= nil then
             local glowIntensity = viewSettings.qualityGlowIntensity
             button:SetBackdropBorderColor(r, g, b, 0.35 + (glowIntensity * 0.65))

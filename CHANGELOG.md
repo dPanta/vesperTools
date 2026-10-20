@@ -1,3 +1,16 @@
+## 7.8.0 - 2026-10-20
+
+### Added
+
+- Bags and banks now display Blizzard's crafting-quality symbols on tiered consumables, reagents, crafting materials, and crafted equipment. Equipment quality remains visible with the professions window closed; saved-character views and combined stacks use the item's full link.
+- Regression checks for upgrade-track colors, localized track names, capped gear, crafted crest bonuses, item-link variants, rarity fallbacks, and reused item buttons.
+
+### Changed
+
+- Equipment borders, glow, and item-level text now use EllesmereUI's upgrade-track palette: Myth orange, Hero bright purple, Champion blue, Veteran green, Adventurer white, and Explorer gray. Midnight Season 2 crafted Hero/Myth items use their crest-bonus colors; items without a recognized track retain their rarity colors.
+- Rarity colors now use Blizzard's bag-color accessor, including player color overrides, with the existing rarity table as a fallback.
+- Item-level text moves to the upper right when a crafting-quality symbol occupies the upper left, preventing overlap. Reused item buttons clear the previous item's quality symbol.
+
 ## 7.7.2 - 2026-10-16
 
 ### Fixed
