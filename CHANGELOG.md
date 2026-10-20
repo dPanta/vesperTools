@@ -1,3 +1,9 @@
+## 7.8.1 - 2026-10-20
+
+### Changed
+
+- Bumped the addon version for the hotfix release.
+
 ## 7.8.0 - 2026-10-20
 
 ### Added
